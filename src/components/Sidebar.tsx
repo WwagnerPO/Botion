@@ -9,6 +9,7 @@ interface Props {
   onOpenVault: () => void;
   onNewNote: () => void;
   onNewFolder: () => void;
+  onSearch: () => void;
   /** `node` es `null` al hacer clic derecho en una zona vacía. */
   onContextMenu: (node: TreeNode | null, e: React.MouseEvent) => void;
 }
@@ -23,6 +24,7 @@ export function Sidebar({
   onOpenVault,
   onNewNote,
   onNewFolder,
+  onSearch,
   onContextMenu,
 }: Props) {
   return (
@@ -40,7 +42,15 @@ export function Sidebar({
         </button>
       </header>
       {vault && (
-        <div className="flex gap-1 px-3 pb-2">
+        <div className="flex items-center gap-1 px-3 pb-2">
+          <button
+            type="button"
+            onClick={onSearch}
+            className="mr-1 flex flex-1 items-center justify-between rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-400 hover:text-neutral-700 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:text-neutral-200"
+          >
+            <span>Buscar</span>
+            <kbd className="font-sans">Ctrl K</kbd>
+          </button>
           <button
             type="button"
             onClick={onNewNote}

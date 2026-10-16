@@ -40,6 +40,18 @@ export function resolveNoteLink(
   return invoke<string | null>("resolve_note_link", { target, from });
 }
 
+export interface SearchHit {
+  path: string;
+  name: string;
+  /** Fragmento con las coincidencias entre `\u0002` y `\u0003`. */
+  snippet: string;
+}
+
+/** Busca en títulos y texto. Sin consulta, devuelve las notas recientes. */
+export function searchNotes(query: string): Promise<SearchHit[]> {
+  return invoke<SearchHit[]>("search_notes", { query });
+}
+
 export function getBacklinks(path: string): Promise<Backlink[]> {
   return invoke<Backlink[]>("get_backlinks", { path });
 }

@@ -1,4 +1,5 @@
 mod files;
+mod index;
 mod links;
 mod vault;
 
@@ -11,8 +12,9 @@ pub fn run() {
             vault::open_vault,
             vault::read_note,
             vault::write_note,
-            links::resolve_note_link,
-            links::get_backlinks,
+            index::resolve_note_link,
+            index::get_backlinks,
+            index::search_notes,
             files::create_note,
             files::create_folder,
             files::rename_entry,

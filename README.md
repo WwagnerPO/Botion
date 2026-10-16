@@ -16,7 +16,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - Crear, renombrar y borrar notas y carpetas; al renombrar se actualizan los enlaces.
 - Editor visual de Markdown con autoguardado.
 - Enlaces entre notas `[[nota]]` y backlinks.
-- Búsqueda rápida en todas las notas.
+- Búsqueda rápida en todas las notas (`Ctrl+K`), sin distinguir tildes.
 - Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
 - Vistas de tabla, kanban y calendario.
 - Plantillas.
@@ -55,7 +55,7 @@ Contenido normal en Markdown...
 3. [x] Editor visual de Markdown con autoguardado.
 4. [x] Enlaces `[[nota]]` y backlinks.
 5. [x] Gestionar notas: crear, renombrar (actualizando enlaces), borrar y detectar cambios externos.
-6. [ ] Índice SQLite y búsqueda rápida.
+6. [x] Índice SQLite y búsqueda rápida.
 7. [ ] Bases de datos: frontmatter + vista de tabla.
 8. [ ] Vistas kanban y calendario, plantillas.
 9. [ ] Sincronización opcional con Git.
@@ -77,6 +77,10 @@ Contenido normal en Markdown...
 1. Instalar dependencias: `pnpm install`
 2. Abrir la app en modo desarrollo: `pnpm tauri dev`
 3. Generar el instalador: `pnpm tauri build`
+
+### Índice de búsqueda
+
+Botion guarda un índice SQLite de cada bóveda en la carpeta de caché del sistema (no dentro de tus notas). Se puede borrar sin perder nada: se reconstruye solo al abrir la bóveda.
 
 ### Estructura
 

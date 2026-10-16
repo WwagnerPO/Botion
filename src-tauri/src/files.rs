@@ -41,6 +41,7 @@ pub fn create_note(target: String, state: tauri::State<VaultState>) -> Result<St
     }
     fs::write(&file, format!("# {}\n", stem(&rel)))
         .map_err(|e| format!("No se pudo crear la nota: {e}"))?;
+    vault::sync_index(&state)?;
     Ok(rel)
 }
 
@@ -162,13 +163,15 @@ pub fn rename(root: &Path, path: &str, new_name: &str) -> Result<Renamed, String
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_entry(
     path: String,
     new_name: String,
-    state: tauri::State<VaultState>,
+    state: tauri::State<'_, VaultState>,
 ) -> Result<Renamed, String> {
-    rename(&vault::current_root(&state)?, &path, &new_name)
+    let renamed = rename(&vault::current_root(&state)?, &path, &new_name)?;
+    vault::sync_index(&state)?;
+    Ok(renamed)
 }
 
 /// Mueve una nota o carpeta a la papelera del sistema.
@@ -182,7 +185,8 @@ pub fn delete_entry(path: String, state: tauri::State<VaultState>) -> Result<(),
     if !target.exists() {
         return Err("Ya no existe".into());
     }
-    trash::delete(&target).map_err(|e| format!("No se pudo mover a la papelera: {e}"))
+    trash::delete(&target).map_err(|e| format!("No se pudo mover a la papelera: {e}"))?;
+    vault::sync_index(&state)
 }
 
 #[cfg(test)]

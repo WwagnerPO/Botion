@@ -2,9 +2,8 @@
 //! `[[nota|texto]]` cambia el texto mostrado y `[[nota#sección]]` apunta a
 //! una sección (de momento se abre la nota entera).
 
-use crate::vault::{self, VaultState};
+use crate::vault;
 use serde::Serialize;
-use std::fs;
 use std::path::Path;
 
 /// Recorre los enlaces `[[...]]` de una nota, ignorando los bloques de
@@ -49,6 +48,7 @@ fn scan_links(content: &str, mut f: impl FnMut(std::ops::Range<usize>)) {
 }
 
 /// Destinos de todos los enlaces `[[...]]` de una nota, sin alias ni sección.
+#[cfg(test)]
 pub fn parse_links(content: &str) -> Vec<String> {
     let mut links = Vec::new();
     scan_links(content, |range| {
@@ -56,6 +56,24 @@ pub fn parse_links(content: &str) -> Vec<String> {
         if !target.is_empty() {
             links.push(target.to_string());
         }
+    });
+    links
+}
+
+/// Como [`parse_links`], pero junto a cada destino devuelve la línea donde
+/// aparece, para mostrarla como contexto.
+pub fn links_with_lines(content: &str) -> Vec<(String, String)> {
+    let mut links = Vec::new();
+    scan_links(content, |range| {
+        let target = link_target(&content[range.clone()]);
+        if target.is_empty() {
+            return;
+        }
+        let start = content[..range.start].rfind('\n').map_or(0, |i| i + 1);
+        let end = content[range.end..]
+            .find('\n')
+            .map_or(content.len(), |i| range.end + i);
+        links.push((target.to_string(), snippet(&content[start..end])));
     });
     links
 }
@@ -140,34 +158,6 @@ pub struct Backlink {
     pub snippet: String,
 }
 
-/// Notas que enlazan a `target_path`.
-pub fn backlinks(root: &Path, notes: &[String], target_path: &str) -> Vec<Backlink> {
-    let mut result = Vec::new();
-
-    for path in notes {
-        if path == target_path {
-            continue;
-        }
-        let Ok(content) = fs::read_to_string(root.join(path)) else {
-            continue;
-        };
-        let links_here = |line: &str| {
-            parse_links(line)
-                .iter()
-                .any(|t| resolve_link(t, path, notes) == Some(target_path))
-        };
-        if let Some(line) = content.lines().find(|l| links_here(l)) {
-            result.push(Backlink {
-                path: path.clone(),
-                name: stem(path).to_string(),
-                snippet: snippet(line),
-            });
-        }
-    }
-    result.sort_by_key(|b| b.name.to_lowercase());
-    result
-}
-
 fn snippet(line: &str) -> String {
     const MAX: usize = 160;
     let line = line.trim();
@@ -184,27 +174,6 @@ pub(crate) fn all_notes(root: &Path) -> Result<Vec<String>, String> {
     let mut notes = Vec::new();
     vault::flatten(&tree, &mut notes);
     Ok(notes)
-}
-
-#[tauri::command]
-pub fn resolve_note_link(
-    target: String,
-    from: String,
-    state: tauri::State<VaultState>,
-) -> Result<Option<String>, String> {
-    let root = vault::current_root(&state)?;
-    let notes = all_notes(&root)?;
-    Ok(resolve_link(&target, &from, &notes).map(str::to_string))
-}
-
-#[tauri::command]
-pub fn get_backlinks(
-    path: String,
-    state: tauri::State<VaultState>,
-) -> Result<Vec<Backlink>, String> {
-    let root = vault::current_root(&state)?;
-    let notes = all_notes(&root)?;
-    Ok(backlinks(&root, &notes, &path))
 }
 
 #[cfg(test)]
@@ -255,26 +224,6 @@ mod tests {
             Some("Archivo/Viejo/Botion.md")
         );
         assert_eq!(resolve_link("No existe", "Ideas.md", &n), None);
-    }
-
-    #[test]
-    fn calcula_backlinks() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        fs::create_dir(root.join("Proyectos")).unwrap();
-        fs::write(root.join("Ideas.md"), "# Ideas\n\nTrabajo en [[Botion]].\n").unwrap();
-        fs::write(root.join("Diario.md"), "Hoy nada que ver con [[Otra]].\n").unwrap();
-        fs::write(root.join("Proyectos/Botion.md"), "Ver [[Ideas]].\n").unwrap();
-        let notes = all_notes(root).unwrap();
-
-        assert_eq!(
-            backlinks(root, &notes, "Proyectos/Botion.md"),
-            vec![Backlink {
-                path: "Ideas.md".into(),
-                name: "Ideas".into(),
-                snippet: "Trabajo en [[Botion]].".into(),
-            }]
-        );
     }
 
     #[test]

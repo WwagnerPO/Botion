@@ -4,6 +4,7 @@ import { Backlinks } from "./components/Backlinks";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { Dialog, type DialogRequest } from "./components/Dialog";
 import { Editor } from "./components/Editor";
+import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { joinFrontmatter, splitFrontmatter } from "./lib/frontmatter";
@@ -59,6 +60,7 @@ export default function App() {
     items: MenuItem[];
   } | null>(null);
   const [dialog, setDialog] = useState<DialogRequest | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const [autosaver] = useState(
     () =>
@@ -71,17 +73,23 @@ export default function App() {
   noteRef.current = note;
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeDialog = useCallback(() => setDialog(null), []);
+  const closeSearch = useCallback(() => setSearching(false), []);
 
+  // Solo cuenta la última apertura si se piden varias seguidas.
+  const loadRequest = useRef(0);
   const loadVault = useCallback(
     async (path: string) => {
+      const request = ++loadRequest.current;
       await autosaver.flush();
       try {
         const v = await openVault(path);
+        if (request !== loadRequest.current) return;
         setVault(v);
         setNote(null);
         setError(null);
         setLastVault(v.root);
       } catch (e) {
+        if (request !== loadRequest.current) return;
         setError(String(e));
         setLastVault(null);
       }
@@ -297,12 +305,26 @@ export default function App() {
     setMenu({ x: e.clientX, y: e.clientY, items });
   }
 
-  // Ctrl/Cmd + N: nueva nota.
+  /** Crea una nota en la raíz desde la búsqueda y la abre. */
+  function createFromSearch(name: string) {
+    run(async () => {
+      const path = await createNote(name);
+      await reloadTree();
+      await openNote(path);
+    });
+  }
+
+  // Atajos: Ctrl/Cmd + N nueva nota; Ctrl/Cmd + K o P buscar.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n" && vault) {
+      if (!(e.ctrlKey || e.metaKey) || !vault) return;
+      const key = e.key.toLowerCase();
+      if (key === "n") {
         e.preventDefault();
         newNote();
+      } else if (key === "k" || key === "p") {
+        e.preventDefault();
+        setSearching(true);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -318,6 +340,7 @@ export default function App() {
         onOpenVault={handleOpenVault}
         onNewNote={() => newNote()}
         onNewFolder={() => newFolder()}
+        onSearch={() => setSearching(true)}
         onContextMenu={handleContextMenu}
       />
       <main className="flex min-w-0 flex-1 flex-col">
@@ -386,6 +409,13 @@ export default function App() {
       </main>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {searching && (
+        <SearchPalette
+          onOpen={(path) => openNote(path)}
+          onCreate={createFromSearch}
+          onClose={closeSearch}
+        />
+      )}
     </div>
   );
 }

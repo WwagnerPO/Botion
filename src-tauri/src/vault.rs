@@ -3,14 +3,18 @@ use notify_debouncer_mini::{DebounceEventResult, Debouncer, new_debouncer};
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
-/// Carpeta abierta actualmente como bóveda y el vigilante de sus cambios.
+use crate::index::Index;
+
+/// Carpeta abierta actualmente como bóveda, su índice y el vigilante de
+/// sus cambios.
 #[derive(Default)]
 pub struct VaultState {
     root: Mutex<Option<PathBuf>>,
+    pub(crate) index: Arc<Mutex<Option<Index>>>,
     watcher: Mutex<Option<Debouncer<RecommendedWatcher>>>,
 }
 
@@ -132,6 +136,7 @@ fn watch(
     app: AppHandle,
     root: PathBuf,
     initial: Vec<TreeNode>,
+    index: Arc<Mutex<Option<Index>>>,
 ) -> Option<Debouncer<RecommendedWatcher>> {
     let watch_root = root.clone();
     let mut last = initial;
@@ -149,6 +154,11 @@ fn watch(
             if !relevant {
                 return;
             }
+            if let Ok(mut guard) = index.lock()
+                && let Some(index) = guard.as_mut()
+            {
+                let _ = index.sync();
+            }
             if let Ok(tree) = read_tree(&root, &root)
                 && tree != last
             {
@@ -165,11 +175,11 @@ fn watch(
     Some(debouncer)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_vault(
     path: String,
     app: AppHandle,
-    state: tauri::State<VaultState>,
+    state: tauri::State<'_, VaultState>,
 ) -> Result<Vault, String> {
     let root = fs::canonicalize(&path).map_err(|e| format!("No se pudo abrir la carpeta: {e}"))?;
     if !root.is_dir() {
@@ -184,7 +194,21 @@ pub fn open_vault(
         root: root.to_string_lossy().into_owned(),
         tree,
     };
-    let watcher = watch(app, root.clone(), vault.tree.clone());
+    // Se deja de vigilar la bóveda anterior antes de cambiar de índice.
+    *state.watcher.lock().map_err(|_| "Estado bloqueado")? = None;
+    let cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("No se encontró la carpeta de caché: {e}"))?;
+    fs::create_dir_all(&cache).map_err(|e| format!("No se pudo crear la caché: {e}"))?;
+    let mut index = Index::open(&crate::index::db_path(&cache, &root), &root)
+        .map_err(|e| format!("No se pudo abrir el índice: {e}"))?;
+    index
+        .sync()
+        .map_err(|e| format!("No se pudo indexar la bóveda: {e}"))?;
+    *state.index.lock().map_err(|_| "Índice bloqueado")? = Some(index);
+
+    let watcher = watch(app, root.clone(), vault.tree.clone(), state.index.clone());
     *state.watcher.lock().map_err(|_| "Estado bloqueado")? = watcher;
     *state.root.lock().map_err(|_| "Estado bloqueado")? = Some(root);
     Ok(vault)
@@ -234,7 +258,15 @@ pub fn write_note(
     if !file.is_file() {
         return Err("La nota ya no existe".into());
     }
-    write_atomic(&file, &content).map_err(|e| format!("No se pudo guardar la nota: {e}"))
+    write_atomic(&file, &content).map_err(|e| format!("No se pudo guardar la nota: {e}"))?;
+    // Al momento, sin esperar al vigilante, para que la búsqueda y los
+    // backlinks vean el cambio enseguida.
+    crate::index::with_index(&state, |i| i.update(&path))
+}
+
+/// Pone el índice al día tras crear, renombrar o borrar desde la app.
+pub(crate) fn sync_index(state: &VaultState) -> Result<(), String> {
+    crate::index::with_index(state, |i| i.sync())
 }
 
 #[cfg(test)]
