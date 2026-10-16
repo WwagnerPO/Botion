@@ -1,44 +1,61 @@
 # Botion
 
-Espacio de trabajo web inspirado en [Notion](https://www.notion.so): páginas anidadas, editor por bloques y bases de datos con varias vistas.
+App de escritorio local para tomar notas, inspirada en [Notion](https://www.notion.so) y [Obsidian](https://obsidian.md). Tus notas son ficheros `.md` normales en una carpeta de tu ordenador, con funciones tipo Notion: editor visual, enlaces entre notas y bases de datos con varias vistas.
 
 > Estado: **en desarrollo inicial** (sin código todavía).
 
-## Objetivos
+## Principios
 
-- Editor por bloques con menú `/`, arrastrar y soltar y anidación.
-- Árbol de páginas infinito (páginas dentro de páginas).
-- Bases de datos con vistas: tabla, tablero (kanban) y calendario.
-- Autenticación y páginas compartidas.
-- Colaboración en tiempo real (fase final).
+- **Local primero:** funciona sin internet, sin servidor y sin cuenta.
+- **Tus datos son tuyos:** todo se guarda en ficheros Markdown que puedes abrir con cualquier editor.
+- **Ligera:** app de escritorio pequeña y rápida para Windows, macOS y Linux.
+
+## Funciones previstas
+
+- Bóveda: abrir una carpeta y navegar por su árbol de notas.
+- Editor visual de Markdown con autoguardado.
+- Enlaces entre notas `[[nota]]` y backlinks.
+- Búsqueda rápida en todas las notas.
+- Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
+- Vistas de tabla, kanban y calendario.
+- Plantillas.
+- Sincronización opcional con Git.
+
+### Ejemplo de nota con propiedades
+
+```markdown
+---
+estado: En curso
+prioridad: Alta
+fecha: 2026-10-20
+etiquetas: [botion, diseño]
+---
+
+# Diseñar la vista kanban
+
+Contenido normal en Markdown...
+```
 
 ## Stack previsto
 
 | Capa | Tecnología |
 |------|------------|
-| Frontend | Next.js, TypeScript, Tailwind CSS |
-| Editor | TipTap o BlockNote |
-| Base de datos | PostgreSQL + Prisma (o Supabase) |
-| Autenticación | NextAuth o Supabase Auth |
-| Tiempo real | Yjs + Hocuspocus o Liveblocks |
-
-## Modelo de datos (borrador)
-
-```
-pages   id, parent_id, title, icon, owner_id, created_at, updated_at
-blocks  id, page_id, parent_block_id, type, content (JSON), position
-users   id, email, name, avatar
-```
+| App de escritorio | [Tauri](https://tauri.app) (Rust) |
+| Interfaz | React, TypeScript, Tailwind CSS |
+| Editor | Milkdown o TipTap (con Markdown) |
+| Índice y búsqueda | SQLite local |
+| Bases de datos | Frontmatter YAML + vistas propias |
 
 ## Hoja de ruta
 
-1. [ ] Preparar el proyecto (Next.js + TypeScript + Tailwind).
-2. [ ] Integrar el editor por bloques.
-3. [ ] Definir el modelo de datos y las migraciones.
-4. [ ] MVP: barra lateral con el árbol de páginas, crear, editar y borrar páginas, autoguardado.
-5. [ ] Autenticación de usuarios.
-6. [ ] Bases de datos con vistas, búsqueda, plantillas y compartir páginas.
-7. [ ] Colaboración en tiempo real.
+1. [ ] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
+2. [ ] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
+3. [ ] Editor visual de Markdown con autoguardado.
+4. [ ] Enlaces `[[nota]]` y backlinks.
+5. [ ] Índice SQLite y búsqueda rápida.
+6. [ ] Bases de datos: frontmatter + vista de tabla.
+7. [ ] Vistas kanban y calendario, plantillas.
+8. [ ] Sincronización opcional con Git.
 
 ## Desarrollo local
 
@@ -55,4 +72,4 @@ Botion tiene doble licencia; puedes elegir la que prefieras:
 
 Salvo que indiques lo contrario, cualquier contribución que envíes para incluirla en Botion se publicará bajo esta misma doble licencia (MIT o Apache 2.0), sin términos adicionales.
 
-Botion es un proyecto independiente y no está afiliado a Notion Labs, Inc.
+Botion es un proyecto independiente y no está afiliado a Notion Labs, Inc. ni a Obsidian.
