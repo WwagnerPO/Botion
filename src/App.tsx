@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Editor } from "./components/Editor";
 import { Sidebar } from "./components/Sidebar";
+import { Autosaver, type SaveStatus } from "./lib/autosave";
+import { joinFrontmatter, splitFrontmatter } from "./lib/frontmatter";
 import {
   getLastVault,
   openVault,
@@ -11,31 +15,64 @@ import {
 
 interface Note {
   path: string;
-  content: string;
+  frontmatter: string;
+  body: string;
 }
+
+const STATUS_TEXT: Record<SaveStatus, string> = {
+  idle: "",
+  saving: "Guardando…",
+  saved: "Guardado",
+  error: "Error al guardar",
+};
 
 export default function App() {
   const [vault, setVault] = useState<Vault | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<SaveStatus>("idle");
 
-  const loadVault = useCallback(async (path: string) => {
-    try {
-      const v = await openVault(path);
-      setVault(v);
-      setNote(null);
-      setError(null);
-      setLastVault(v.root);
-    } catch (e) {
-      setError(String(e));
-      setLastVault(null);
-    }
-  }, []);
+  const [autosaver] = useState(
+    () =>
+      new Autosaver((s, err) => {
+        setStatus(s);
+        if (err) setError(err);
+      }),
+  );
+  const noteRef = useRef(note);
+  noteRef.current = note;
+
+  const loadVault = useCallback(
+    async (path: string) => {
+      await autosaver.flush();
+      try {
+        const v = await openVault(path);
+        setVault(v);
+        setNote(null);
+        setError(null);
+        setLastVault(v.root);
+      } catch (e) {
+        setError(String(e));
+        setLastVault(null);
+      }
+    },
+    [autosaver],
+  );
 
   useEffect(() => {
     const last = getLastVault();
     if (last) loadVault(last);
   }, [loadVault]);
+
+  // Antes de cerrar la ventana, guarda lo que quede pendiente.
+  useEffect(() => {
+    const unlisten = getCurrentWindow().onCloseRequested(() =>
+      autosaver.flush(),
+    );
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [autosaver]);
 
   async function handleOpenVault() {
     const path = await pickVaultFolder();
@@ -43,13 +80,29 @@ export default function App() {
   }
 
   async function handleSelect(path: string) {
+    if (path === note?.path) return;
+    await autosaver.flush();
     try {
-      setNote({ path, content: await readNote(path) });
+      const content = await readNote(path);
+      setNote({ path, ...splitFrontmatter(content) });
+      setStatus("idle");
       setError(null);
     } catch (e) {
       setError(String(e));
     }
   }
+
+  const handleChange = useCallback(
+    (body: string) => {
+      const current = noteRef.current;
+      if (!current) return;
+      autosaver.schedule(
+        current.path,
+        joinFrontmatter(current.frontmatter, body),
+      );
+    },
+    [autosaver],
+  );
 
   return (
     <div className="flex h-full">
@@ -69,12 +122,19 @@ export default function App() {
           </div>
         )}
         {note ? (
-          <article className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-8 py-10">
-            <p className="mb-6 text-xs text-neutral-400">{note.path}</p>
-            <pre className="font-sans text-[15px] leading-relaxed whitespace-pre-wrap">
-              {note.content}
-            </pre>
-          </article>
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-3xl pt-10">
+              <div className="mb-6 flex items-center justify-between px-14 text-xs text-neutral-400">
+                <span className="truncate">{note.path}</span>
+                <span aria-live="polite">{STATUS_TEXT[status]}</span>
+              </div>
+              <Editor
+                key={note.path}
+                initialValue={note.body}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center">
             <div>

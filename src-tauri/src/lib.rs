@@ -7,7 +7,8 @@ pub fn run() {
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             vault::open_vault,
-            vault::read_note
+            vault::read_note,
+            vault::write_note
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");

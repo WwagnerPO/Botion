@@ -43,7 +43,7 @@ Contenido normal en Markdown...
 |------|------------|
 | App de escritorio | [Tauri](https://tauri.app) (Rust) |
 | Interfaz | React, TypeScript, Tailwind CSS |
-| Editor | Milkdown o TipTap (con Markdown) |
+| Editor | [Milkdown](https://milkdown.dev) (Crepe) |
 | Índice y búsqueda | SQLite local |
 | Bases de datos | Frontmatter YAML + vistas propias |
 
@@ -51,7 +51,7 @@ Contenido normal en Markdown...
 
 1. [x] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
 2. [x] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
-3. [ ] Editor visual de Markdown con autoguardado.
+3. [x] Editor visual de Markdown con autoguardado.
 4. [ ] Enlaces `[[nota]]` y backlinks.
 5. [ ] Índice SQLite y búsqueda rápida.
 6. [ ] Bases de datos: frontmatter + vista de tabla.

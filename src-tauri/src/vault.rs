@@ -134,6 +134,37 @@ pub fn read_note(path: String, state: tauri::State<VaultState>) -> Result<String
     fs::read_to_string(&file).map_err(|e| format!("No se pudo leer la nota: {e}"))
 }
 
+/// Escribe el contenido en un fichero temporal oculto y luego lo renombra,
+/// para que la nota nunca quede a medio escribir si algo falla.
+pub fn write_atomic(file: &Path, content: &str) -> std::io::Result<()> {
+    let name = file
+        .file_name()
+        .ok_or_else(|| std::io::Error::other("Ruta sin nombre de fichero"))?
+        .to_string_lossy();
+    let tmp = file.with_file_name(format!(".{name}.botion-tmp"));
+    fs::write(&tmp, content)?;
+    fs::rename(&tmp, file).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
+}
+
+#[tauri::command]
+pub fn write_note(
+    path: String,
+    content: String,
+    state: tauri::State<VaultState>,
+) -> Result<(), String> {
+    let root = current_root(&state)?;
+    let file = resolve(&root, &path)?;
+    if !is_markdown(&file) {
+        return Err("Solo se pueden guardar ficheros .md".into());
+    }
+    if !file.is_file() {
+        return Err("La nota ya no existe".into());
+    }
+    write_atomic(&file, &content).map_err(|e| format!("No se pudo guardar la nota: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,6 +212,18 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn escritura_atomica() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("nota.md");
+        fs::write(&file, "viejo").unwrap();
+
+        write_atomic(&file, "nuevo").unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), "nuevo");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]

@@ -21,6 +21,10 @@ export function readNote(path: string): Promise<string> {
   return invoke<string>("read_note", { path });
 }
 
+export function writeNote(path: string, content: string): Promise<void> {
+  return invoke<void>("write_note", { path, content });
+}
+
 /** Muestra el selector de carpetas. Devuelve `null` si se cancela. */
 export async function pickVaultFolder(): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false });
