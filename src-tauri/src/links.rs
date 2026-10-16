@@ -7,13 +7,16 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 
-/// Destinos de todos los enlaces `[[...]]` de una nota, sin alias ni sección.
-/// Ignora los bloques de código y el código en línea.
-pub fn parse_links(content: &str) -> Vec<String> {
-    let mut links = Vec::new();
+/// Recorre los enlaces `[[...]]` de una nota, ignorando los bloques de
+/// código y el código en línea. Llama a `f` con la posición (en bytes) del
+/// texto de dentro de los corchetes.
+fn scan_links(content: &str, mut f: impl FnMut(std::ops::Range<usize>)) {
     let mut in_fence = false;
+    let mut line_start = 0;
 
-    for line in content.lines() {
+    for line in content.split_inclusive('\n') {
+        let offset = line_start;
+        line_start += line.len();
         if line.trim_start().starts_with("```") {
             in_fence = !in_fence;
             continue;
@@ -21,24 +24,64 @@ pub fn parse_links(content: &str) -> Vec<String> {
         if in_fence {
             continue;
         }
+        let mut seg_start = offset;
         for (i, segment) in line.split('`').enumerate() {
+            let base = seg_start;
+            seg_start += segment.len() + 1;
             // Los segmentos impares están dentro de `código`.
             if i % 2 == 1 {
                 continue;
             }
-            let mut rest = segment;
-            while let Some(start) = rest.find("[[") {
-                let after = &rest[start + 2..];
-                let Some(end) = after.find("]]") else { break };
-                let target = link_target(&after[..end]);
-                if !target.is_empty() {
-                    links.push(target.to_string());
+            let mut pos = 0;
+            while let Some(start) = segment[pos..].find("[[") {
+                let inner_start = pos + start + 2;
+                let Some(len) = segment[inner_start..].find("]]") else {
+                    break;
+                };
+                let inner_end = inner_start + len;
+                if !segment[inner_start..inner_end].contains('\n') {
+                    f(base + inner_start..base + inner_end);
                 }
-                rest = &after[end + 2..];
+                pos = inner_end + 2;
             }
         }
     }
+}
+
+/// Destinos de todos los enlaces `[[...]]` de una nota, sin alias ni sección.
+pub fn parse_links(content: &str) -> Vec<String> {
+    let mut links = Vec::new();
+    scan_links(content, |range| {
+        let target = link_target(&content[range]);
+        if !target.is_empty() {
+            links.push(target.to_string());
+        }
+    });
     links
+}
+
+/// Cambia el destino de los enlaces de una nota. `f` recibe el destino
+/// actual y devuelve el nuevo, o `None` para dejarlo igual. El alias y la
+/// sección se conservan.
+pub fn rewrite_links(content: &str, mut f: impl FnMut(&str) -> Option<String>) -> String {
+    let mut edits = Vec::new();
+    scan_links(content, |range| {
+        let inner = &content[range.clone()];
+        let target_len = inner.find(['|', '#']).unwrap_or(inner.len());
+        let target = inner[..target_len].trim();
+        if target.is_empty() {
+            return;
+        }
+        if let Some(new_target) = f(target) {
+            edits.push((range.start..range.start + target_len, new_target));
+        }
+    });
+
+    let mut out = content.to_string();
+    for (range, new_target) in edits.into_iter().rev() {
+        out.replace_range(range, &new_target);
+    }
+    out
 }
 
 fn link_target(inner: &str) -> &str {
@@ -46,7 +89,7 @@ fn link_target(inner: &str) -> &str {
     inner.split('#').next().unwrap_or("").trim()
 }
 
-fn stem(path: &str) -> &str {
+pub(crate) fn stem(path: &str) -> &str {
     let name = path.rsplit('/').next().unwrap_or(path);
     name.strip_suffix(".md").unwrap_or(name)
 }
@@ -135,7 +178,7 @@ fn snippet(line: &str) -> String {
     }
 }
 
-fn all_notes(root: &Path) -> Result<Vec<String>, String> {
+pub(crate) fn all_notes(root: &Path) -> Result<Vec<String>, String> {
     let tree =
         vault::read_tree(root, root).map_err(|e| format!("No se pudo leer la bóveda: {e}"))?;
     let mut notes = Vec::new();
@@ -162,39 +205,6 @@ pub fn get_backlinks(
     let root = vault::current_root(&state)?;
     let notes = all_notes(&root)?;
     Ok(backlinks(&root, &notes, &path))
-}
-
-/// Ruta de la nota nueva para un enlace que aún no existe.
-fn new_note_path(target: &str) -> Result<String, String> {
-    let target = target.trim().trim_end_matches(".md").trim();
-    let invalid = |part: &str| {
-        part.is_empty()
-            || part.starts_with('.')
-            || part
-                .chars()
-                .any(|c| matches!(c, '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-    };
-    if target.split('/').any(invalid) {
-        return Err(format!("«{target}» no es un nombre de nota válido"));
-    }
-    Ok(format!("{target}.md"))
-}
-
-/// Crea la nota de un enlace `[[...]]` que aún no existe y devuelve su ruta.
-#[tauri::command]
-pub fn create_note(target: String, state: tauri::State<VaultState>) -> Result<String, String> {
-    let root = vault::current_root(&state)?;
-    let rel = new_note_path(&target)?;
-    let file = vault::resolve(&root, &rel)?;
-    if file.exists() {
-        return Err("Ya existe una nota con ese nombre".into());
-    }
-    if let Some(parent) = file.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("No se pudo crear la carpeta: {e}"))?;
-    }
-    fs::write(&file, format!("# {}\n", stem(&rel)))
-        .map_err(|e| format!("No se pudo crear la nota: {e}"))?;
-    Ok(rel)
 }
 
 #[cfg(test)]
@@ -268,15 +278,17 @@ mod tests {
     }
 
     #[test]
-    fn valida_nombres_de_notas_nuevas() {
-        assert_eq!(new_note_path("Nueva idea").unwrap(), "Nueva idea.md");
+    fn reescribe_enlaces_conservando_alias() {
+        let md = "Ver [[Ideas]], [[Ideas|mis ideas]] y [[ideas#Plan]].\n\
+                  `[[Ideas]]` no cambia, [[Otra]] tampoco.\n";
+        let out = rewrite_links(md, |t| {
+            t.eq_ignore_ascii_case("ideas")
+                .then(|| "Proyectos/Lluvia".to_string())
+        });
         assert_eq!(
-            new_note_path("Proyectos/Plan.md").unwrap(),
-            "Proyectos/Plan.md"
+            out,
+            "Ver [[Proyectos/Lluvia]], [[Proyectos/Lluvia|mis ideas]] y \
+             [[Proyectos/Lluvia#Plan]].\n`[[Ideas]]` no cambia, [[Otra]] tampoco.\n"
         );
-        assert!(new_note_path("../fuera").is_err());
-        assert!(new_note_path(".oculta").is_err());
-        assert!(new_note_path("a:b").is_err());
-        assert!(new_note_path("").is_err());
     }
 }

@@ -1,3 +1,4 @@
+mod files;
 mod links;
 mod vault;
 
@@ -12,7 +13,11 @@ pub fn run() {
             vault::write_note,
             links::resolve_note_link,
             links::get_backlinks,
-            links::create_note,
+            files::create_note,
+            files::create_folder,
+            files::rename_entry,
+            files::delete_entry,
+            vault::refresh_tree,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");

@@ -1,14 +1,21 @@
+use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
+use notify_debouncer_mini::{DebounceEventResult, Debouncer, new_debouncer};
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 
-/// Carpeta abierta actualmente como bóveda.
+/// Carpeta abierta actualmente como bóveda y el vigilante de sus cambios.
 #[derive(Default)]
-pub struct VaultState(pub Mutex<Option<PathBuf>>);
+pub struct VaultState {
+    root: Mutex<Option<PathBuf>>,
+    watcher: Mutex<Option<Debouncer<RecommendedWatcher>>>,
+}
 
 /// Nodo del árbol de la bóveda: una carpeta o una nota `.md`.
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum TreeNode {
     Folder {
@@ -108,20 +115,67 @@ pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
 
 pub(crate) fn current_root(state: &VaultState) -> Result<PathBuf, String> {
     state
-        .0
+        .root
         .lock()
         .map_err(|_| "Estado bloqueado".to_string())?
         .clone()
         .ok_or_else(|| "No hay ninguna bóveda abierta".into())
 }
 
+pub(crate) fn tree_of(root: &Path) -> Result<Vec<TreeNode>, String> {
+    read_tree(root, root).map_err(|e| format!("No se pudo leer la carpeta: {e}"))
+}
+
+/// Avisa a la interfaz con el evento `vault-changed` cuando cambian las
+/// notas o carpetas desde fuera de la app (otro editor, el explorador...).
+fn watch(
+    app: AppHandle,
+    root: PathBuf,
+    initial: Vec<TreeNode>,
+) -> Option<Debouncer<RecommendedWatcher>> {
+    let watch_root = root.clone();
+    let mut last = initial;
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(300),
+        move |result: DebounceEventResult| {
+            let Ok(events) = result else { return };
+            // Ignora ficheros ocultos: .git, temporales de guardado...
+            let relevant = events.iter().any(|e| {
+                e.path.strip_prefix(&root).is_ok_and(|rel| {
+                    !rel.components()
+                        .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
+                })
+            });
+            if !relevant {
+                return;
+            }
+            if let Ok(tree) = read_tree(&root, &root)
+                && tree != last
+            {
+                let _ = app.emit("vault-changed", &tree);
+                last = tree;
+            }
+        },
+    )
+    .ok()?;
+    debouncer
+        .watcher()
+        .watch(&watch_root, RecursiveMode::Recursive)
+        .ok()?;
+    Some(debouncer)
+}
+
 #[tauri::command]
-pub fn open_vault(path: String, state: tauri::State<VaultState>) -> Result<Vault, String> {
+pub fn open_vault(
+    path: String,
+    app: AppHandle,
+    state: tauri::State<VaultState>,
+) -> Result<Vault, String> {
     let root = fs::canonicalize(&path).map_err(|e| format!("No se pudo abrir la carpeta: {e}"))?;
     if !root.is_dir() {
         return Err("La ruta no es una carpeta".into());
     }
-    let tree = read_tree(&root, &root).map_err(|e| format!("No se pudo leer la carpeta: {e}"))?;
+    let tree = tree_of(&root)?;
     let vault = Vault {
         name: root
             .file_name()
@@ -130,8 +184,16 @@ pub fn open_vault(path: String, state: tauri::State<VaultState>) -> Result<Vault
         root: root.to_string_lossy().into_owned(),
         tree,
     };
-    *state.0.lock().map_err(|_| "Estado bloqueado")? = Some(root);
+    let watcher = watch(app, root.clone(), vault.tree.clone());
+    *state.watcher.lock().map_err(|_| "Estado bloqueado")? = watcher;
+    *state.root.lock().map_err(|_| "Estado bloqueado")? = Some(root);
     Ok(vault)
+}
+
+/// Vuelve a leer el árbol de la bóveda abierta.
+#[tauri::command]
+pub fn refresh_tree(state: tauri::State<VaultState>) -> Result<Vec<TreeNode>, String> {
+    tree_of(&current_root(&state)?)
 }
 
 #[tauri::command]

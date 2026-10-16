@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 export type TreeNode =
@@ -43,9 +44,37 @@ export function getBacklinks(path: string): Promise<Backlink[]> {
   return invoke<Backlink[]>("get_backlinks", { path });
 }
 
-/** Crea la nota de un enlace que aún no existe y devuelve su ruta. */
+/** Crea una nota (por ejemplo `Proyectos/Plan`) y devuelve su ruta. */
 export function createNote(target: string): Promise<string> {
   return invoke<string>("create_note", { target });
+}
+
+export function createFolder(path: string): Promise<string> {
+  return invoke<string>("create_folder", { path });
+}
+
+export interface Renamed {
+  path: string;
+  updated_notes: number;
+}
+
+/** Renombra una nota o carpeta y actualiza los enlaces que apuntan a ella. */
+export function renameEntry(path: string, newName: string): Promise<Renamed> {
+  return invoke<Renamed>("rename_entry", { path, newName });
+}
+
+/** Mueve una nota o carpeta a la papelera del sistema. */
+export function deleteEntry(path: string): Promise<void> {
+  return invoke<void>("delete_entry", { path });
+}
+
+export function refreshTree(): Promise<TreeNode[]> {
+  return invoke<TreeNode[]>("refresh_tree");
+}
+
+/** Avisa cuando cambian las notas desde fuera de la app. */
+export function onVaultChanged(handler: (tree: TreeNode[]) => void) {
+  return listen<TreeNode[]>("vault-changed", (e) => handler(e.payload));
 }
 
 /** Muestra el selector de carpetas. Devuelve `null` si se cancela. */

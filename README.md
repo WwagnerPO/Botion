@@ -13,6 +13,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 ## Funciones previstas
 
 - Bóveda: abrir una carpeta y navegar por su árbol de notas.
+- Crear, renombrar y borrar notas y carpetas; al renombrar se actualizan los enlaces.
 - Editor visual de Markdown con autoguardado.
 - Enlaces entre notas `[[nota]]` y backlinks.
 - Búsqueda rápida en todas las notas.
@@ -53,10 +54,11 @@ Contenido normal en Markdown...
 2. [x] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
 3. [x] Editor visual de Markdown con autoguardado.
 4. [x] Enlaces `[[nota]]` y backlinks.
-5. [ ] Índice SQLite y búsqueda rápida.
-6. [ ] Bases de datos: frontmatter + vista de tabla.
-7. [ ] Vistas kanban y calendario, plantillas.
-8. [ ] Sincronización opcional con Git.
+5. [x] Gestionar notas: crear, renombrar (actualizando enlaces), borrar y detectar cambios externos.
+6. [ ] Índice SQLite y búsqueda rápida.
+7. [ ] Bases de datos: frontmatter + vista de tabla.
+8. [ ] Vistas kanban y calendario, plantillas.
+9. [ ] Sincronización opcional con Git.
 
 ## Desarrollo local
 
