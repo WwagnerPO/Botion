@@ -3,21 +3,26 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./editor.css";
+import { wikiLink } from "../lib/wikilink";
 import { useEffect, useRef } from "react";
 
 interface Props {
   initialValue: string;
   onChange: (markdown: string) => void;
+  /** Se llama al hacer clic en un enlace `[[nota]]`. */
+  onOpenLink: (target: string) => void;
 }
 
 /**
  * Editor visual de Markdown. Se monta una vez por nota: para cambiar de
  * nota, el padre cambia la `key` del componente.
  */
-export function Editor({ initialValue, onChange }: Props) {
+export function Editor({ initialValue, onChange, onOpenLink }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onOpenLinkRef = useRef(onOpenLink);
+  onOpenLinkRef.current = onOpenLink;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -56,6 +61,8 @@ export function Editor({ initialValue, onChange }: Props) {
         },
       },
     });
+    crepe.editor.use(wikiLink);
+
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
       ctx.update(remarkStringifyOptionsCtx, (prev) => ({
@@ -86,5 +93,13 @@ export function Editor({ initialValue, onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={rootRef} className="botion-editor" />;
+  function handleClick(e: React.MouseEvent) {
+    const link = (e.target as HTMLElement).closest<HTMLElement>("[data-wikilink]");
+    if (link?.dataset.wikilink) {
+      e.preventDefault();
+      onOpenLinkRef.current(link.dataset.wikilink);
+    }
+  }
+
+  return <div ref={rootRef} className="botion-editor" onClick={handleClick} />;
 }

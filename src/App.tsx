@@ -1,15 +1,20 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Backlinks } from "./components/Backlinks";
 import { Editor } from "./components/Editor";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { joinFrontmatter, splitFrontmatter } from "./lib/frontmatter";
 import {
+  createNote,
+  getBacklinks,
   getLastVault,
   openVault,
   pickVaultFolder,
   readNote,
+  resolveNoteLink,
   setLastVault,
+  type Backlink,
   type Vault,
 } from "./lib/vault";
 
@@ -31,6 +36,7 @@ export default function App() {
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<SaveStatus>("idle");
+  const [backlinks, setBacklinks] = useState<Backlink[]>([]);
 
   const [autosaver] = useState(
     () =>
@@ -81,12 +87,33 @@ export default function App() {
 
   async function handleSelect(path: string) {
     if (path === note?.path) return;
+    // Guarda antes de leer, para que los backlinks vean los últimos cambios.
     await autosaver.flush();
     try {
-      const content = await readNote(path);
+      const [content, links] = await Promise.all([
+        readNote(path),
+        getBacklinks(path),
+      ]);
       setNote({ path, ...splitFrontmatter(content) });
+      setBacklinks(links);
       setStatus("idle");
       setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  /** Abre la nota de un enlace `[[...]]`, creándola si aún no existe. */
+  async function handleOpenLink(target: string) {
+    if (!note || !vault) return;
+    await autosaver.flush();
+    try {
+      let path = await resolveNoteLink(target, note.path);
+      if (!path) {
+        path = await createNote(target);
+        setVault(await openVault(vault.root));
+      }
+      await handleSelect(path);
     } catch (e) {
       setError(String(e));
     }
@@ -132,7 +159,9 @@ export default function App() {
                 key={note.path}
                 initialValue={note.body}
                 onChange={handleChange}
+                onOpenLink={handleOpenLink}
               />
+              <Backlinks backlinks={backlinks} onSelect={handleSelect} />
             </div>
           </div>
         ) : (

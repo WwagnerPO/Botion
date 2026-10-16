@@ -52,7 +52,7 @@ Contenido normal en Markdown...
 1. [x] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
 2. [x] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
 3. [x] Editor visual de Markdown con autoguardado.
-4. [ ] Enlaces `[[nota]]` y backlinks.
+4. [x] Enlaces `[[nota]]` y backlinks.
 5. [ ] Índice SQLite y búsqueda rápida.
 6. [ ] Bases de datos: frontmatter + vista de tabla.
 7. [ ] Vistas kanban y calendario, plantillas.

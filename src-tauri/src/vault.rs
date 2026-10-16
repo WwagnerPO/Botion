@@ -33,7 +33,7 @@ fn is_hidden(name: &str) -> bool {
     name.starts_with('.')
 }
 
-fn is_markdown(path: &Path) -> bool {
+pub(crate) fn is_markdown(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("md"))
@@ -87,6 +87,16 @@ pub fn read_tree(root: &Path, dir: &Path) -> std::io::Result<Vec<TreeNode>> {
     Ok(folders)
 }
 
+/// Todas las notas del árbol, como rutas relativas.
+pub fn flatten(tree: &[TreeNode], out: &mut Vec<String>) {
+    for node in tree {
+        match node {
+            TreeNode::Folder { children, .. } => flatten(children, out),
+            TreeNode::Note { path, .. } => out.push(path.clone()),
+        }
+    }
+}
+
 /// Une `rel` a la raíz sin permitir salir de ella (`..`, rutas absolutas).
 pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
     let rel = Path::new(rel);
@@ -96,7 +106,7 @@ pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(root.join(rel))
 }
 
-fn current_root(state: &VaultState) -> Result<PathBuf, String> {
+pub(crate) fn current_root(state: &VaultState) -> Result<PathBuf, String> {
     state
         .0
         .lock()

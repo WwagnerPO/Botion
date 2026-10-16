@@ -25,6 +25,29 @@ export function writeNote(path: string, content: string): Promise<void> {
   return invoke<void>("write_note", { path, content });
 }
 
+export interface Backlink {
+  path: string;
+  name: string;
+  snippet: string;
+}
+
+/** Ruta de la nota a la que apunta `[[target]]` desde `from`, o `null`. */
+export function resolveNoteLink(
+  target: string,
+  from: string,
+): Promise<string | null> {
+  return invoke<string | null>("resolve_note_link", { target, from });
+}
+
+export function getBacklinks(path: string): Promise<Backlink[]> {
+  return invoke<Backlink[]>("get_backlinks", { path });
+}
+
+/** Crea la nota de un enlace que aún no existe y devuelve su ruta. */
+export function createNote(target: string): Promise<string> {
+  return invoke<string>("create_note", { target });
+}
+
 /** Muestra el selector de carpetas. Devuelve `null` si se cancela. */
 export async function pickVaultFolder(): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false });
