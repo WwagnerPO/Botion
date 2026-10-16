@@ -46,4 +46,13 @@ Las instrucciones de instalación se añadirán cuando exista el paso 1.
 
 ## Licencia
 
-Por definir.
+Botion tiene doble licencia; puedes elegir la que prefieras:
+
+- [MIT](LICENSE-MIT)
+- [Apache 2.0](LICENSE-APACHE)
+
+### Contribuciones
+
+Salvo que indiques lo contrario, cualquier contribución que envíes para incluirla en Botion se publicará bajo esta misma doble licencia (MIT o Apache 2.0), sin términos adicionales.
+
+Botion es un proyecto independiente y no está afiliado a Notion Labs, Inc.
