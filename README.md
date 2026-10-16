@@ -49,7 +49,7 @@ Contenido normal en Markdown...
 ## Hoja de ruta
 
 1. [x] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
-2. [ ] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
+2. [x] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
 3. [ ] Editor visual de Markdown con autoguardado.
 4. [ ] Enlaces `[[nota]]` y backlinks.
 5. [ ] Índice SQLite y búsqueda rápida.
@@ -80,6 +80,7 @@ Contenido normal en Markdown...
 ```
 src/              Interfaz (React + TypeScript + Tailwind)
   components/     Componentes de la interfaz
+  lib/            Comunicación con Rust y utilidades
 src-tauri/        Parte nativa (Rust + Tauri)
   src/            Código Rust
   tauri.conf.json Configuración de la app
