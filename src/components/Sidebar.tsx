@@ -1,5 +1,6 @@
 import type { Vault } from "../lib/vault";
 import { FileTree } from "./FileTree";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface Props {
   vault: Vault | null;
@@ -42,6 +43,9 @@ export function Sidebar({ vault, selected, onSelect, onOpenVault }: Props) {
           />
         )}
       </nav>
+      <footer className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+        <ThemeToggle />
+      </footer>
     </aside>
   );
 }

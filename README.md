@@ -19,6 +19,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
 - Vistas de tabla, kanban y calendario.
 - Plantillas.
+- Tema claro, oscuro o el del sistema.
 - Sincronización opcional con Git.
 
 ### Ejemplo de nota con propiedades
