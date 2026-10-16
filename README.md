@@ -2,7 +2,7 @@
 
 App de escritorio local para tomar notas, inspirada en [Notion](https://www.notion.so) y [Obsidian](https://obsidian.md). Tus notas son ficheros `.md` normales en una carpeta de tu ordenador, con funciones tipo Notion: editor visual, enlaces entre notas y bases de datos con varias vistas.
 
-> Estado: **en desarrollo inicial** (sin código todavía).
+> Estado: **en desarrollo inicial**.
 
 ## Principios
 
@@ -48,7 +48,7 @@ Contenido normal en Markdown...
 
 ## Hoja de ruta
 
-1. [ ] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
+1. [x] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
 2. [ ] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
 3. [ ] Editor visual de Markdown con autoguardado.
 4. [ ] Enlaces `[[nota]]` y backlinks.
@@ -59,7 +59,31 @@ Contenido normal en Markdown...
 
 ## Desarrollo local
 
-Las instrucciones de instalación se añadirán cuando exista el paso 1.
+### Requisitos
+
+1. [Node.js](https://nodejs.org) 20 o superior.
+2. [pnpm](https://pnpm.io/installation).
+3. [Rust](https://www.rust-lang.org/tools/install) (estable).
+4. Dependencias de sistema de Tauri para tu sistema operativo: [guía oficial](https://tauri.app/start/prerequisites/).
+   - Windows: Microsoft C++ Build Tools y WebView2 (ya viene en Windows 10/11).
+   - macOS: `xcode-select --install`.
+   - Linux (Debian/Ubuntu): `sudo apt install libwebkit2gtk-4.1-dev build-essential libssl-dev librsvg2-dev libxdo-dev libayatana-appindicator3-dev`.
+
+### Arrancar
+
+1. Instalar dependencias: `pnpm install`
+2. Abrir la app en modo desarrollo: `pnpm tauri dev`
+3. Generar el instalador: `pnpm tauri build`
+
+### Estructura
+
+```
+src/              Interfaz (React + TypeScript + Tailwind)
+  components/     Componentes de la interfaz
+src-tauri/        Parte nativa (Rust + Tauri)
+  src/            Código Rust
+  tauri.conf.json Configuración de la app
+```
 
 ## Licencia
 
