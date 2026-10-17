@@ -56,3 +56,10 @@
 .dark .botion-editor .wikilink:hover {
   background: rgb(196 181 253 / 0.1);
 }
+
+/* Iconos de línea de los comandos «/» de Botion (el tema los rellena). */
+svg.botion-icon,
+svg.botion-icon * {
+  fill: none !important;
+  stroke: currentColor;
+}

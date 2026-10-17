@@ -3,6 +3,7 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./editor.css";
+import { buildBotionMenu } from "../lib/slashCommands";
 import { wikiLink } from "../lib/wikilink";
 import { useEffect, useRef } from "react";
 
@@ -11,18 +12,27 @@ interface Props {
   onChange: (markdown: string) => void;
   /** Se llama al hacer clic en un enlace `[[nota]]`. */
   onOpenLink: (target: string) => void;
+  /** Comando «/Enlace a nota»: pide elegir una nota e inserta el enlace. */
+  onRequestLink: (insert: (target: string) => void) => void;
 }
 
 /**
  * Editor visual de Markdown. Se monta una vez por nota: para cambiar de
  * nota, el padre cambia la `key` del componente.
  */
-export function Editor({ initialValue, onChange, onOpenLink }: Props) {
+export function Editor({
+  initialValue,
+  onChange,
+  onOpenLink,
+  onRequestLink,
+}: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onOpenLinkRef = useRef(onOpenLink);
   onOpenLinkRef.current = onOpenLink;
+  const onRequestLinkRef = useRef(onRequestLink);
+  onRequestLinkRef.current = onRequestLink;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -58,6 +68,9 @@ export function Editor({ initialValue, onChange, onOpenLink }: Props) {
             table: { label: "Tabla" },
             math: { label: "Fórmula" },
           },
+          buildMenu: buildBotionMenu({
+            requestLink: (insert) => onRequestLinkRef.current(insert),
+          }),
         },
       },
     });

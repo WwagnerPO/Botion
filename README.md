@@ -23,6 +23,19 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - Tema claro, oscuro o el del sistema.
 - Sincronización opcional con Git.
 
+### Comandos `/`
+
+Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Puedes seguir escribiendo para filtrar (por ejemplo `/fecha`).
+
+| Grupo | Comandos |
+|-------|----------|
+| Texto | Texto, Título 1–6, Cita, Separador |
+| Listas | Lista con viñetas, Lista numerada, Lista de tareas |
+| Avanzado | Imagen, Código, Tabla, Fórmula |
+| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Fecha de hoy, Hora actual |
+
+Previstos: Base de datos y Propiedad (paso 7), Plantilla (paso 8).
+
 ### Ejemplo de nota con propiedades
 
 ```markdown

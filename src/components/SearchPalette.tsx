@@ -5,6 +5,8 @@ interface Props {
   onOpen: (path: string) => void;
   onCreate: (name: string) => void;
   onClose: () => void;
+  /** Texto del campo de búsqueda vacío. */
+  placeholder?: string;
 }
 
 type Item = { kind: "hit"; hit: SearchHit } | { kind: "create"; name: string };
@@ -46,7 +48,12 @@ function folderOf(path: string) {
   return i === -1 ? "" : path.slice(0, i);
 }
 
-export function SearchPalette({ onOpen, onCreate, onClose }: Props) {
+export function SearchPalette({
+  onOpen,
+  onCreate,
+  onClose,
+  placeholder = "Buscar o crear una nota…",
+}: Props) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [active, setActive] = useState(0);
@@ -125,7 +132,7 @@ export function SearchPalette({ onOpen, onCreate, onClose }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Buscar o crear una nota…"
+          placeholder={placeholder}
           role="combobox"
           aria-expanded="true"
           aria-controls="search-results"

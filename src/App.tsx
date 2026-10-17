@@ -61,6 +61,10 @@ export default function App() {
   } | null>(null);
   const [dialog, setDialog] = useState<DialogRequest | null>(null);
   const [searching, setSearching] = useState(false);
+  /** Comando «/Enlace a nota» esperando a que se elija una nota. */
+  const [linkRequest, setLinkRequest] = useState<
+    ((target: string) => void) | null
+  >(null);
 
   const [autosaver] = useState(
     () =>
@@ -74,6 +78,7 @@ export default function App() {
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeDialog = useCallback(() => setDialog(null), []);
   const closeSearch = useCallback(() => setSearching(false), []);
+  const closeLinkPicker = useCallback(() => setLinkRequest(null), []);
 
   // Solo cuenta la última apertura si se piden varias seguidas.
   const loadRequest = useRef(0);
@@ -305,6 +310,23 @@ export default function App() {
     setMenu({ x: e.clientX, y: e.clientY, items });
   }
 
+  /** Texto para enlazar a `path`: el nombre, o la ruta si hay otra igual. */
+  function linkTarget(path: string) {
+    const name = path.split("/").pop()!.replace(/\.md$/, "");
+    const notes: string[] = [];
+    const collect = (nodes: TreeNode[]) =>
+      nodes.forEach((n) =>
+        n.kind === "folder" ? collect(n.children) : notes.push(n.path),
+      );
+    collect(vault?.tree ?? []);
+    const same = notes.filter(
+      (p) =>
+        p.split("/").pop()!.replace(/\.md$/, "").toLowerCase() ===
+        name.toLowerCase(),
+    );
+    return same.length > 1 ? path.replace(/\.md$/, "") : name;
+  }
+
   /** Crea una nota en la raíz desde la búsqueda y la abre. */
   function createFromSearch(name: string) {
     run(async () => {
@@ -380,6 +402,7 @@ export default function App() {
                 initialValue={note.body}
                 onChange={handleChange}
                 onOpenLink={handleOpenLink}
+                onRequestLink={(insert) => setLinkRequest(() => insert)}
               />
               <Backlinks
                 backlinks={backlinks}
@@ -409,6 +432,20 @@ export default function App() {
       </main>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {linkRequest && (
+        <SearchPalette
+          placeholder="Enlazar a una nota…"
+          onOpen={(path) => linkRequest(linkTarget(path))}
+          onCreate={(name) =>
+            run(async () => {
+              await createNote(name);
+              await reloadTree();
+              linkRequest(name);
+            })
+          }
+          onClose={closeLinkPicker}
+        />
+      )}
       {searching && (
         <SearchPalette
           onOpen={(path) => openNote(path)}
