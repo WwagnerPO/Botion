@@ -829,6 +829,9 @@ export default function App() {
                 onNotify={setNotice}
                 onRequestDatabase={(insert) => setDbPicker(() => insert)}
                 embedHost={embedHost}
+                vaultRoot={vault?.root ?? ""}
+                notePath={note.path}
+                onError={showError}
               />
               <Backlinks
                 backlinks={backlinks}

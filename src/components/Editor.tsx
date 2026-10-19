@@ -8,6 +8,9 @@ import { callout } from "../lib/callout";
 import { embed, embedSchema } from "../lib/embed";
 import { Embed, type EmbedHost } from "./Embed";
 import { $view } from "@milkdown/kit/utils";
+import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
+import { imageSchema } from "@milkdown/kit/preset/commonmark";
+import { displayUrl, saveAttachment } from "../lib/attachments";
 import { highlight, highlightSchema, toggleHighlightCommand } from "../lib/highlight";
 import { renderMermaidPreview } from "../lib/mermaid";
 import { buildBotionMenu } from "../lib/slashCommands";
@@ -37,12 +40,28 @@ interface Props {
   onRequestDatabase: (insert: (folder: string) => void) => void;
   /** Lo que necesitan las incrustaciones `![[...]]`. */
   embedHost: EmbedHost;
+  /** Para guardar y mostrar imágenes adjuntas. */
+  vaultRoot: string;
+  notePath: string;
+  onError: (message: string) => void;
 }
 
 /**
  * Editor visual de Markdown. Se monta una vez por nota: para cambiar de
  * nota, el padre cambia la `key` del componente.
  */
+/** Abre el selector de ficheros del sistema y devuelve el elegido. */
+function pickFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
+}
+
 export function Editor({
   initialValue,
   onChange,
@@ -56,6 +75,9 @@ export function Editor({
   onNotify,
   onRequestDatabase,
   embedHost,
+  vaultRoot,
+  notePath,
+  onError,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -81,11 +103,17 @@ export function Editor({
   onRequestDatabaseRef.current = onRequestDatabase;
   const embedHostRef = useRef(embedHost);
   embedHostRef.current = embedHost;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     const crepe = new Crepe({
       root: rootRef.current,
       defaultValue: initialValue,
+      // El bloque de imagen de Milkdown guarda el tamaño en el texto
+      // alternativo (![1.00](...)) y estropea las notas; se usa una vista
+      // de imagen propia que respeta el Markdown.
+      features: { [Crepe.Feature.ImageBlock]: false },
       featureConfigs: {
         [Crepe.Feature.CodeMirror]: {
           renderPreview: renderMermaidPreview,
@@ -134,7 +162,7 @@ export function Editor({
           },
           advancedGroup: {
             label: "Avanzado",
-            image: { label: "Imagen" },
+            image: null,
             codeBlock: { label: "Código" },
             table: { label: "Tabla" },
             math: { label: "Fórmula" },
@@ -147,6 +175,16 @@ export function Editor({
             requestPage: (insert) => onRequestPageRef.current(insert),
             notify: (message) => onNotifyRef.current(message),
             requestDatabase: (insert) => onRequestDatabaseRef.current(insert),
+            pickImage: async () => {
+              const file = await pickFile("image/*");
+              if (!file) return null;
+              try {
+                return await saveAttachment(notePath, file);
+              } catch (e) {
+                onErrorRef.current(String(e));
+                return null;
+              }
+            },
           }),
         },
       },
@@ -183,7 +221,51 @@ export function Editor({
       };
     });
 
-    crepe.editor.use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    // Pegar o arrastrar imágenes al editor: se guardan como adjuntos.
+    crepe.editor
+      .config((ctx) => {
+        ctx.update(uploadConfig.key, (prev) => ({
+          ...prev,
+          uploader: async (files, schema) => {
+            const nodes = [];
+            for (const file of Array.from(files)) {
+              if (!file.type.startsWith("image/")) continue;
+              try {
+                const src = await saveAttachment(notePath, file);
+                const alt = file.name.replace(/\.[^.]+$/, "");
+                nodes.push(schema.nodes.image.create({ src, alt }));
+              } catch (e) {
+                onErrorRef.current(String(e));
+              }
+            }
+            return nodes;
+          },
+        }));
+      })
+      .use(upload);
+
+    // Imágenes: la ruta relativa de la nota se convierte en una que la app
+    // puede mostrar, sin tocar lo que se guarda.
+    const imageView = $view(imageSchema.node, () => (initial) => {
+      const img = document.createElement("img");
+      img.className = "note-image";
+      const apply = (node: typeof initial) => {
+        img.src = displayUrl(node.attrs.src, vaultRoot, notePath);
+        img.alt = node.attrs.alt ?? "";
+        img.title = node.attrs.title ?? "";
+      };
+      apply(initial);
+      return {
+        dom: img,
+        update: (node) => {
+          if (node.type.name !== "image") return false;
+          apply(node);
+          return true;
+        },
+      };
+    });
+
+    crepe.editor.use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {

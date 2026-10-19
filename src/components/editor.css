@@ -175,3 +175,13 @@ svg.botion-icon * {
 .botion-editor .embed-body h1,
 .botion-editor .embed-body h2,
 .botion-editor .embed-body h3 { margin: 0.4em 0 0.2em; }
+
+/* Imágenes de las notas */
+.botion-editor img.note-image {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 6px;
+}
+.botion-editor img.note-image.ProseMirror-selectednode {
+  outline: 2px solid #8b5cf6;
+}

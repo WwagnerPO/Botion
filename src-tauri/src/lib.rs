@@ -1,3 +1,4 @@
+mod attachments;
 mod database;
 mod files;
 mod git;
@@ -35,6 +36,7 @@ pub fn run() {
             git::git_init,
             git::git_sync,
             git::git_resolve,
+            attachments::save_attachment,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");

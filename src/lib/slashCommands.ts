@@ -46,6 +46,7 @@ const highlightIcon = icon('<path d="M4 20h16"/><path d="M14.5 4.5l5 5L10 19H5v-
 const diagramIcon = icon(
   '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/><path d="M6.5 8v5h11v3"/>',
 );
+const imageIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>');
 const embedIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/><path d="M15 15l2 2 3-3"/>');
 const dbViewIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/>');
 const databaseIcon = icon(
@@ -159,6 +160,8 @@ export interface SlashHandlers {
   requestPage: (insert: (target: string) => void) => void;
   /** Pide elegir una base de datos; al elegirla se llama con su carpeta. */
   requestDatabase: (insert: (folder: string) => void) => void;
+  /** Elige una imagen y la guarda como adjunto; devuelve su enlace. */
+  pickImage: () => Promise<string | null>;
   /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
   notify: (message: string) => void;
 }
@@ -192,6 +195,21 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestPage((target) => insertWikiLink(ctx, target));
+      },
+    });
+    group.addItem("image", {
+      label: "Imagen",
+      icon: imageIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.pickImage().then((src) => {
+          if (!src) return;
+          const view = ctx.get(editorViewCtx);
+          const alt = decodeURI(src).split("/").pop()!.replace(/\.[^.]+$/, "");
+          const node = view.state.schema.nodes.image.create({ src, alt });
+          view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
+          view.focus();
+        });
       },
     });
     group.addItem("embed", {
