@@ -1,6 +1,6 @@
 [package]
 name = "botion"
-version = "0.1.0"
+version = "0.2.0"
 description = "App de escritorio local de notas Markdown con funciones tipo Notion"
 authors = ["wwagnerpo"]
 license = "MIT OR Apache-2.0"

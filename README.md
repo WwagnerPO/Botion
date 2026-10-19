@@ -160,6 +160,41 @@ Contenido normal en Markdown...
 8. [x] Vistas kanban y calendario, plantillas.
 9. [x] Sincronización opcional con Git.
 
+### Pendiente
+
+Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión siguiente.
+
+**Versión y pruebas**
+
+- [ ] Publicar la v0.2.0.
+- [ ] Probar en la app real el vídeo, el audio y YouTube.
+
+**Bases de datos**
+
+- [ ] Vistas de galería, lista y cronograma.
+- [ ] Varias vistas guardadas por base de datos, cada una con sus filtros.
+- [ ] Filtros por propiedad («estado es Hecho») y agrupar en la tabla.
+- [ ] Fórmulas, relaciones entre bases de datos y rollups.
+- [ ] Más tipos de propiedad: URL, email, teléfono, archivos, fecha de creación y de edición.
+- [ ] Abrir una fila en un panel lateral sin salir de la tabla.
+- [ ] Columnas: cambiar ancho, reordenar y ocultar.
+- [ ] Totales al pie (contar, sumar, media).
+
+**Editor y navegación**
+
+- [ ] Menciones con `@` (nota o fecha).
+- [ ] Pestañas o dos notas lado a lado.
+- [ ] Grafo de enlaces entre notas.
+- [ ] Historial de una nota con Git: ver y restaurar versiones.
+- [ ] Notas favoritas y recientes en la barra lateral.
+- [ ] Arrastrar bloques para reordenarlos y «Convertir en…».
+
+**Extras**
+
+- [ ] Importar desde Notion (export en Markdown/CSV).
+- [ ] Firmar los instaladores (necesita certificados de pago; ver más abajo).
+- [ ] Actualización automática de la app.
+
 ## Desarrollo local
 
 ### Requisitos
@@ -181,7 +216,7 @@ Contenido normal en Markdown...
 ### Publicar una versión
 
 1. Sube el número de versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json`.
-2. Crea y sube una etiqueta: `git tag v0.1.0 && git push origin v0.1.0`.
+2. Crea y sube una etiqueta (`git tag v0.2.0 && git push origin v0.2.0`) o lanza a mano el workflow «Versión» en **Actions**.
 3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
 4. Revisa el borrador y pulsa **Publish release**.
 
