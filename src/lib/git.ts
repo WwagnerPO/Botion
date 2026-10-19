@@ -16,6 +16,15 @@ export interface SyncResult {
   pushed: boolean;
   /** Notas que han cambiado al bajar cambios del remoto. */
   changed: string[];
+  /** Notas que chocan con el remoto: hay que elegir cómo resolverlo. */
+  conflicts: string[];
+}
+
+/** mine: gana lo de este ordenador; theirs: lo del remoto; both: la mía y una copia de la del remoto. */
+export type Strategy = "mine" | "theirs" | "both";
+
+export function gitResolve(strategy: Strategy): Promise<SyncResult> {
+  return invoke<SyncResult>("git_resolve", { strategy });
 }
 
 export function gitStatus(): Promise<GitStatus> {

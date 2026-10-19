@@ -34,6 +34,7 @@ pub fn run() {
             git::git_status,
             git::git_init,
             git::git_sync,
+            git::git_resolve,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");
