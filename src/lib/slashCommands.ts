@@ -18,6 +18,12 @@ const dateIcon = icon(
   '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
 );
 const timeIcon = icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
+const propertyIcon = icon(
+  '<path d="M4 6h6M4 12h6M4 18h6"/><path d="M14 6h6M14 12h6M14 18h6" stroke-dasharray="2 2"/>',
+);
+const databaseIcon = icon(
+  '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
+);
 
 /** Quita el «/texto» que se ha escrito para abrir el menú. */
 function clearSlash(ctx: Ctx) {
@@ -52,6 +58,10 @@ export function insertWikiLink(ctx: Ctx, target: string) {
 export interface SlashHandlers {
   /** Pide elegir una nota; al elegirla se llama a `insert` con su destino. */
   requestLink: (insert: (target: string) => void) => void;
+  /** Añade una propiedad (frontmatter) a la nota. */
+  addProperty: () => void;
+  /** Crea una base de datos junto a la nota. */
+  createDatabase: () => void;
 }
 
 type MenuBuilder = {
@@ -75,6 +85,22 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestLink((target) => insertWikiLink(ctx, target));
+      },
+    });
+    group.addItem("property", {
+      label: "Propiedad",
+      icon: propertyIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.addProperty();
+      },
+    });
+    group.addItem("database", {
+      label: "Base de datos",
+      icon: databaseIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.createDatabase();
       },
     });
     group.addItem("today", {

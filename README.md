@@ -32,9 +32,20 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Imagen, Código, Tabla, Fórmula |
-| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Fecha de hoy, Hora actual |
+| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Propiedad, Base de datos, Fecha de hoy, Hora actual |
 
-Previstos: Base de datos y Propiedad (paso 7), Plantilla (paso 8).
+Previsto: Plantilla (paso 8).
+
+### Bases de datos
+
+Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en base de datos», o `/Base de datos` desde una nota). Se abre como una tabla:
+
+- Cada nota de la carpeta es una fila; sus propiedades son las columnas.
+- Tipos de columna: Texto, Número, Casilla, Fecha, Selección y Etiquetas.
+- Ordenar, filtrar, añadir, renombrar y eliminar propiedades desde la cabecera.
+- Los datos están en el frontmatter de cada nota. La carpeta solo guarda la configuración de la vista en un fichero oculto `.botion-db.json`.
+
+Las notas muestran sus propiedades encima del texto y se pueden editar ahí también.
 
 ### Ejemplo de nota con propiedades
 
@@ -69,7 +80,7 @@ Contenido normal en Markdown...
 4. [x] Enlaces `[[nota]]` y backlinks.
 5. [x] Gestionar notas: crear, renombrar (actualizando enlaces), borrar y detectar cambios externos.
 6. [x] Índice SQLite y búsqueda rápida.
-7. [ ] Bases de datos: frontmatter + vista de tabla.
+7. [x] Bases de datos: frontmatter + vista de tabla.
 8. [ ] Vistas kanban y calendario, plantillas.
 9. [ ] Sincronización opcional con Git.
 

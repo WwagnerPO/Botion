@@ -3,7 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 export type TreeNode =
-  | { kind: "folder"; name: string; path: string; children: TreeNode[] }
+  | {
+      kind: "folder";
+      name: string;
+      path: string;
+      /** La carpeta es una base de datos (se abre como tabla). */
+      database: boolean;
+      children: TreeNode[];
+    }
   | { kind: "note"; name: string; path: string };
 
 export interface Vault {

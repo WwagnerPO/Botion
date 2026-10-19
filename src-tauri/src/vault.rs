@@ -25,6 +25,8 @@ pub enum TreeNode {
     Folder {
         name: String,
         path: String,
+        /// La carpeta es una base de datos (se abre como tabla).
+        database: bool,
         children: Vec<TreeNode>,
     },
     Note {
@@ -77,6 +79,7 @@ pub fn read_tree(root: &Path, dir: &Path) -> std::io::Result<Vec<TreeNode>> {
 
         if file_type.is_dir() {
             folders.push(TreeNode::Folder {
+                database: crate::database::is_database(&path),
                 children: read_tree(root, &path)?,
                 path: relative(root, &path),
                 name,
@@ -115,6 +118,19 @@ pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
         return Err("Ruta no válida".into());
     }
     Ok(root.join(rel))
+}
+
+/// Como [`resolve`], pero acepta `""` para la raíz y exige una carpeta.
+pub fn resolve_dir(root: &Path, rel: &str) -> Result<PathBuf, String> {
+    let dir = if rel.is_empty() {
+        root.to_path_buf()
+    } else {
+        resolve(root, rel)?
+    };
+    if !dir.is_dir() {
+        return Err("La carpeta no existe".into());
+    }
+    Ok(dir)
 }
 
 pub(crate) fn current_root(state: &VaultState) -> Result<PathBuf, String> {
@@ -296,6 +312,7 @@ mod tests {
                 TreeNode::Folder {
                     name: "Proyectos".into(),
                     path: "Proyectos".into(),
+                    database: false,
                     children: vec![TreeNode::Note {
                         name: "botion".into(),
                         path: "Proyectos/botion.md".into(),
@@ -304,6 +321,7 @@ mod tests {
                 TreeNode::Folder {
                     name: "Vacía".into(),
                     path: "Vacía".into(),
+                    database: false,
                     children: vec![],
                 },
                 TreeNode::Note {

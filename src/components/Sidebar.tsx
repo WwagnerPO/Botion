@@ -6,6 +6,7 @@ interface Props {
   vault: Vault | null;
   selected: string | null;
   onSelect: (path: string) => void;
+  onSelectDatabase: (path: string) => void;
   onOpenVault: () => void;
   onNewNote: () => void;
   onNewFolder: () => void;
@@ -21,6 +22,7 @@ export function Sidebar({
   vault,
   selected,
   onSelect,
+  onSelectDatabase,
   onOpenVault,
   onNewNote,
   onNewFolder,
@@ -112,6 +114,7 @@ export function Sidebar({
             nodes={vault.tree}
             selected={selected}
             onSelect={onSelect}
+            onSelectDatabase={onSelectDatabase}
             onContextMenu={(node, e) => {
               e.stopPropagation();
               onContextMenu(node, e);

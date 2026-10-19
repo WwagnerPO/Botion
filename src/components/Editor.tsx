@@ -14,6 +14,10 @@ interface Props {
   onOpenLink: (target: string) => void;
   /** Comando «/Enlace a nota»: pide elegir una nota e inserta el enlace. */
   onRequestLink: (insert: (target: string) => void) => void;
+  /** Comando «/Propiedad». */
+  onAddProperty: () => void;
+  /** Comando «/Base de datos». */
+  onCreateDatabase: () => void;
 }
 
 /**
@@ -25,6 +29,8 @@ export function Editor({
   onChange,
   onOpenLink,
   onRequestLink,
+  onAddProperty,
+  onCreateDatabase,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -33,6 +39,10 @@ export function Editor({
   onOpenLinkRef.current = onOpenLink;
   const onRequestLinkRef = useRef(onRequestLink);
   onRequestLinkRef.current = onRequestLink;
+  const onAddPropertyRef = useRef(onAddProperty);
+  onAddPropertyRef.current = onAddProperty;
+  const onCreateDatabaseRef = useRef(onCreateDatabase);
+  onCreateDatabaseRef.current = onCreateDatabase;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -70,6 +80,8 @@ export function Editor({
           },
           buildMenu: buildBotionMenu({
             requestLink: (insert) => onRequestLinkRef.current(insert),
+            addProperty: () => onAddPropertyRef.current(),
+            createDatabase: () => onCreateDatabaseRef.current(),
           }),
         },
       },

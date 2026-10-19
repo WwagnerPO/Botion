@@ -2,11 +2,23 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Backlinks } from "./components/Backlinks";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
+import { DatabaseView } from "./components/DatabaseView";
 import { Dialog, type DialogRequest } from "./components/Dialog";
 import { Editor } from "./components/Editor";
+import { PropertiesPanel } from "./components/PropertiesPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
+import {
+  columnOptions,
+  createDatabase,
+  getDatabase,
+  getProperties,
+  setProperty,
+  type Kind,
+  type PropValue,
+  type Props,
+} from "./lib/database";
 import { joinFrontmatter, splitFrontmatter } from "./lib/frontmatter";
 import {
   createFolder,
@@ -54,6 +66,14 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [backlinks, setBacklinks] = useState<Backlink[]>([]);
+  const [props, setProps] = useState<Props>({});
+  /** Tipos y valores de la base de datos de la nota abierta, si está en una. */
+  const [propKinds, setPropKinds] = useState<Record<string, Kind>>({});
+  const [propOptions, setPropOptions] = useState<Record<string, string[]>>({});
+  /** Carpeta de base de datos abierta (en lugar de una nota). */
+  const [database, setDatabase] = useState<string | null>(null);
+  /** Sube para que la tabla abierta se vuelva a leer del disco. */
+  const [dbReloadKey, setDbReloadKey] = useState(0);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -79,6 +99,11 @@ export default function App() {
   const closeDialog = useCallback(() => setDialog(null), []);
   const closeSearch = useCallback(() => setSearching(false), []);
   const closeLinkPicker = useCallback(() => setLinkRequest(null), []);
+  const showError = useCallback((message: string) => setError(message), []);
+  const showMenu = useCallback(
+    (x: number, y: number, items: MenuItem[]) => setMenu({ x, y, items }),
+    [],
+  );
 
   // Solo cuenta la última apertura si se piden varias seguidas.
   const loadRequest = useRef(0);
@@ -91,6 +116,7 @@ export default function App() {
         if (request !== loadRequest.current) return;
         setVault(v);
         setNote(null);
+        setDatabase(null);
         setError(null);
         setLastVault(v.root);
       } catch (e) {
@@ -119,9 +145,10 @@ export default function App() {
 
   // Cambios hechos desde fuera de la app (otro editor, el explorador...).
   useEffect(() => {
-    const unlisten = onVaultChanged((tree) =>
-      setVault((v) => v && { ...v, tree }),
-    );
+    const unlisten = onVaultChanged((tree) => {
+      setVault((v) => v && { ...v, tree });
+      setDbReloadKey((k) => k + 1);
+    });
     return () => {
       unlisten.then((f) => f());
     };
@@ -143,9 +170,11 @@ export default function App() {
     // Guarda antes de leer, para que los backlinks vean los últimos cambios.
     await autosaver.flush();
     try {
-      const [content, links] = await Promise.all([
+      const [content, links, noteProps] = await Promise.all([
         readNote(path),
         getBacklinks(path),
+        // Si el frontmatter no es válido, la nota se abre sin propiedades.
+        getProperties(path).catch(() => ({})),
       ]);
       setNote((prev) => ({
         path,
@@ -153,11 +182,119 @@ export default function App() {
         version: (prev?.version ?? 0) + 1,
       }));
       setBacklinks(links);
+      setProps(noteProps);
+      setDatabase(null);
+      loadNoteDatabase(path);
       setStatus("idle");
       setError(null);
     } catch (e) {
       setError(String(e));
     }
+  }
+
+  /** Si la nota está en una base de datos, usa sus tipos de columna. */
+  async function loadNoteDatabase(path: string) {
+    const folder = path.split("/").slice(0, -1).join("/");
+    const isDatabase = (nodes: TreeNode[]): boolean =>
+      nodes.some(
+        (n) =>
+          n.kind === "folder" &&
+          (n.path === folder ? n.database : isDatabase(n.children)),
+      );
+    if (!folder || !isDatabase(vault?.tree ?? [])) {
+      setPropKinds({});
+      setPropOptions({});
+      return;
+    }
+    try {
+      const db = await getDatabase(folder);
+      setPropKinds(Object.fromEntries(db.columns.map((c) => [c.name, c.kind])));
+      setPropOptions(columnOptions(db));
+    } catch {
+      setPropKinds({});
+      setPropOptions({});
+    }
+  }
+
+  async function openDatabase(path: string) {
+    await autosaver.flush();
+    setNote(null);
+    setDatabase(path);
+    setError(null);
+  }
+
+  /** Cambia una propiedad de la nota abierta (`null` la quita). */
+  async function changeProperty(key: string, value: PropValue) {
+    const current = noteRef.current;
+    if (!current) return;
+    await run(async () => {
+      // Primero se guarda el texto pendiente, para no pisar el cambio.
+      await autosaver.flush();
+      await setProperty(current.path, key, value);
+      const [content, noteProps] = await Promise.all([
+        readNote(current.path),
+        getProperties(current.path),
+      ]);
+      // El editor sigue igual: solo cambia el frontmatter que se guardará.
+      setNote((n) =>
+        n && n.path === current.path
+          ? { ...n, frontmatter: splitFrontmatter(content).frontmatter }
+          : n,
+      );
+      setProps(noteProps);
+    });
+  }
+
+  /** Comando «/Propiedad»: añade una propiedad vacía a la nota. */
+  function addProperty() {
+    setDialog({
+      kind: "prompt",
+      title: "Nueva propiedad",
+      label: "Nombre",
+      initial: "",
+      confirm: "Añadir",
+      onConfirm: (name) => {
+        if (name in props) {
+          setError(`La nota ya tiene la propiedad «${name}»`);
+          return;
+        }
+        return changeProperty(name, "");
+      },
+    });
+  }
+
+  /** Comando «/Base de datos»: crea una junto a la nota y la abre. */
+  function createDatabaseHere(folder = "") {
+    setDialog({
+      kind: "prompt",
+      title: "Nueva base de datos",
+      label: "Nombre",
+      initial: "Sin título",
+      confirm: "Crear",
+      onConfirm: (name) =>
+        run(async () => {
+          const path = await createDatabase(folder ? `${folder}/${name}` : name);
+          await reloadTree();
+          await openDatabase(path);
+        }),
+    });
+  }
+
+  /** Nueva fila (nota) en una base de datos, sin salir de la tabla. */
+  function newRow(folder: string) {
+    setDialog({
+      kind: "prompt",
+      title: "Nueva fila",
+      label: "Nombre de la nota",
+      initial: "Sin título",
+      confirm: "Crear",
+      onConfirm: (name) =>
+        run(async () => {
+          await createNote(`${folder}/${name}`);
+          await reloadTree();
+          setDbReloadKey((k) => k + 1);
+        }),
+    });
   }
 
   /** Abre la nota de un enlace `[[...]]`, creándola si aún no existe. */
@@ -242,6 +379,9 @@ export default function App() {
           await autosaver.flush();
           const result = await renameEntry(node.path, name);
           await reloadTree();
+          if (database && isInside(database, node.path)) {
+            setDatabase(result.path + database.slice(node.path.length));
+          }
           const current = noteRef.current;
           if (current) {
             // La nota abierta puede haber cambiado de ruta o de enlaces.
@@ -278,6 +418,7 @@ export default function App() {
           if (noteRef.current && isInside(noteRef.current.path, node.path)) {
             setNote(null);
           }
+          if (database && isInside(database, node.path)) setDatabase(null);
           await reloadTree();
         }),
     });
@@ -290,6 +431,7 @@ export default function App() {
         ? [
             { label: "Nueva nota", onSelect: () => newNote() },
             { label: "Nueva carpeta", onSelect: () => newFolder() },
+            { label: "Nueva base de datos", onSelect: () => createDatabaseHere() },
           ]
         : [
             ...(node.kind === "folder"
@@ -302,6 +444,20 @@ export default function App() {
                     label: "Nueva carpeta aquí",
                     onSelect: () => newFolder(node.path),
                   },
+                  node.database
+                    ? {
+                        label: "Abrir como tabla",
+                        onSelect: () => openDatabase(node.path),
+                      }
+                    : {
+                        label: "Convertir en base de datos",
+                        onSelect: () =>
+                          run(async () => {
+                            await createDatabase(node.path);
+                            await reloadTree();
+                            await openDatabase(node.path);
+                          }),
+                      },
                 ]
               : []),
             { label: "Renombrar", onSelect: () => rename(node) },
@@ -357,8 +513,9 @@ export default function App() {
     <div className="flex h-full">
       <Sidebar
         vault={vault}
-        selected={note?.path ?? null}
+        selected={note?.path ?? database}
         onSelect={(path) => openNote(path)}
+        onSelectDatabase={openDatabase}
         onOpenVault={handleOpenVault}
         onNewNote={() => newNote()}
         onNewFolder={() => newFolder()}
@@ -397,12 +554,25 @@ export default function App() {
                 <span className="truncate">{note.path}</span>
                 <span aria-live="polite">{STATUS_TEXT[status]}</span>
               </div>
+              <PropertiesPanel
+                path={note.path}
+                props={props}
+                kinds={propKinds}
+                options={propOptions}
+                onChange={changeProperty}
+                onRemove={(key) => changeProperty(key, null)}
+                onAdd={addProperty}
+              />
               <Editor
                 key={`${note.path}#${note.version}`}
                 initialValue={note.body}
                 onChange={handleChange}
                 onOpenLink={handleOpenLink}
                 onRequestLink={(insert) => setLinkRequest(() => insert)}
+                onAddProperty={addProperty}
+                onCreateDatabase={() =>
+                  createDatabaseHere(note.path.split("/").slice(0, -1).join("/"))
+                }
               />
               <Backlinks
                 backlinks={backlinks}
@@ -410,6 +580,17 @@ export default function App() {
               />
             </div>
           </div>
+        ) : database ? (
+          <DatabaseView
+            key={database}
+            path={database}
+            reloadKey={dbReloadKey}
+            onOpenNote={(path) => openNote(path)}
+            onNewRow={newRow}
+            onError={showError}
+            showMenu={showMenu}
+            showDialog={setDialog}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center">
             <div>

@@ -1,6 +1,8 @@
+mod database;
 mod files;
 mod index;
 mod links;
+mod props;
 mod vault;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -20,6 +22,13 @@ pub fn run() {
             files::rename_entry,
             files::delete_entry,
             vault::refresh_tree,
+            database::get_database,
+            database::save_database_config,
+            database::create_database,
+            database::set_property,
+            database::get_properties,
+            database::rename_database_property,
+            database::delete_database_property,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");

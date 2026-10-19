@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 
 /// Nombre válido para una nota o carpeta en cualquier sistema operativo.
-fn valid_name(name: &str) -> bool {
+pub(crate) fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name == name.trim()
         && !name.starts_with('.')
