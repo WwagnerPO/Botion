@@ -140,6 +140,9 @@ export default function App() {
     | null
   >(null);
   const closeTemplatePicker = useCallback(() => setTemplateRequest(null), []);
+  /** Comando «/Vista de base de datos» esperando a que se elija una. */
+  const [dbPicker, setDbPicker] = useState<((folder: string) => void) | null>(null);
+  const closeDbPicker = useCallback(() => setDbPicker(null), []);
   const showError = useCallback((message: string) => setError(message), []);
   const showMenu = useCallback(
     (x: number, y: number, items: MenuItem[]) => setMenu({ x, y, items }),
@@ -430,6 +433,37 @@ export default function App() {
     if (current && result.changed.includes(current.path)) {
       await openNote(current.path, true);
     }
+  }
+
+  // Lo que necesitan las incrustaciones ![[...]] del editor. Usa la nota
+  // abierta en el momento de cada llamada.
+  const openNoteRef = useRef(openNote);
+  openNoteRef.current = openNote;
+  const openDatabaseRef = useRef(openDatabase);
+  openDatabaseRef.current = openDatabase;
+  const embedHost = useMemo(
+    () => ({
+      resolve: (target: string) =>
+        resolveNoteLink(target, noteRef.current?.path ?? ""),
+      readNote,
+      getDatabase,
+      open: (path: string, kind: "note" | "database") =>
+        kind === "note" ? openNoteRef.current(path) : openDatabaseRef.current(path),
+    }),
+    [],
+  );
+
+  /** Bases de datos de la bóveda, para elegir una. */
+  function listDatabases() {
+    const out: { path: string; name: string }[] = [];
+    const walk = (nodes: TreeNode[]) =>
+      nodes.forEach((n) => {
+        if (n.kind !== "folder") return;
+        if (n.database) out.push({ path: n.path, name: n.name });
+        walk(n.children);
+      });
+    walk(vault?.tree ?? []);
+    return out;
   }
 
   /** Comando «/Página»: crea una nota junto a la abierta y la enlaza. */
@@ -793,6 +827,8 @@ export default function App() {
                 linkExists={linkExists}
                 onRequestPage={requestPage}
                 onNotify={setNotice}
+                onRequestDatabase={(insert) => setDbPicker(() => insert)}
+                embedHost={embedHost}
               />
               <Backlinks
                 backlinks={backlinks}
@@ -833,6 +869,21 @@ export default function App() {
       </main>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {dbPicker && (
+        <SearchPalette
+          placeholder="Elegir base de datos…"
+          recentLabel="Bases de datos"
+          allowCreate={false}
+          source={async (query) =>
+            listDatabases()
+              .filter((d) => d.path.toLowerCase().includes(query.trim().toLowerCase()))
+              .map((d) => ({ ...d, snippet: "" }))
+          }
+          onOpen={(path) => dbPicker(path)}
+          onCreate={() => {}}
+          onClose={closeDbPicker}
+        />
+      )}
       {templateRequest && (
         <SearchPalette
           placeholder="Elegir plantilla…"

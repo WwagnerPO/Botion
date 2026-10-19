@@ -3,7 +3,11 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./editor.css";
+import { createRoot } from "react-dom/client";
 import { callout } from "../lib/callout";
+import { embed, embedSchema } from "../lib/embed";
+import { Embed, type EmbedHost } from "./Embed";
+import { $view } from "@milkdown/kit/utils";
 import { highlight, highlightSchema, toggleHighlightCommand } from "../lib/highlight";
 import { renderMermaidPreview } from "../lib/mermaid";
 import { buildBotionMenu } from "../lib/slashCommands";
@@ -29,6 +33,10 @@ interface Props {
   /** Comando «/Página». */
   onRequestPage: (insert: (target: string) => void) => void;
   onNotify: (message: string) => void;
+  /** Comando «/Vista de base de datos». */
+  onRequestDatabase: (insert: (folder: string) => void) => void;
+  /** Lo que necesitan las incrustaciones `![[...]]`. */
+  embedHost: EmbedHost;
 }
 
 /**
@@ -46,6 +54,8 @@ export function Editor({
   linkExists,
   onRequestPage,
   onNotify,
+  onRequestDatabase,
+  embedHost,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -67,6 +77,10 @@ export function Editor({
   onRequestPageRef.current = onRequestPage;
   const onNotifyRef = useRef(onNotify);
   onNotifyRef.current = onNotify;
+  const onRequestDatabaseRef = useRef(onRequestDatabase);
+  onRequestDatabaseRef.current = onRequestDatabase;
+  const embedHostRef = useRef(embedHost);
+  embedHostRef.current = embedHost;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -132,11 +146,44 @@ export function Editor({
             requestTemplate: (insert) => onRequestTemplateRef.current(insert),
             requestPage: (insert) => onRequestPageRef.current(insert),
             notify: (message) => onNotifyRef.current(message),
+            requestDatabase: (insert) => onRequestDatabaseRef.current(insert),
           }),
         },
       },
     });
-    crepe.editor.use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    // Las incrustaciones se dibujan con React dentro de ProseMirror.
+    const host: EmbedHost = {
+      resolve: (t) => embedHostRef.current.resolve(t),
+      readNote: (p) => embedHostRef.current.readNote(p),
+      getDatabase: (p) => embedHostRef.current.getDatabase(p),
+      open: (p, kind) => embedHostRef.current.open(p, kind),
+    };
+    const embedView = $view(embedSchema.node, () => (initial) => {
+      const dom = document.createElement("div");
+      dom.className = "embed";
+      dom.dataset.embed = initial.attrs.target;
+      const root = createRoot(dom);
+      let target = initial.attrs.target as string;
+      root.render(<Embed target={target} host={host} />);
+      return {
+        dom,
+        update: (node) => {
+          if (node.type.name !== "embed") return false;
+          if (node.attrs.target !== target) {
+            target = node.attrs.target;
+            dom.dataset.embed = target;
+            root.render(<Embed target={target} host={host} />);
+          }
+          return true;
+        },
+        // Los clics de dentro (abrir, filas) son de la incrustación.
+        stopEvent: (e) => e.type !== "dragstart" && (e.target as HTMLElement).closest("button") !== null,
+        ignoreMutation: () => true,
+        destroy: () => setTimeout(() => root.unmount()),
+      };
+    });
+
+    crepe.editor.use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {

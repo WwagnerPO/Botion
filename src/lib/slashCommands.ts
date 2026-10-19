@@ -9,6 +9,7 @@ import {
   calloutTitleSchema,
   type CalloutType,
 } from "./callout";
+import { embedSchema } from "./embed";
 import { highlightSchema } from "./highlight";
 import { wikiLinkSchema } from "./wikilink";
 
@@ -45,6 +46,8 @@ const highlightIcon = icon('<path d="M4 20h16"/><path d="M14.5 4.5l5 5L10 19H5v-
 const diagramIcon = icon(
   '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/><path d="M6.5 8v5h11v3"/>',
 );
+const embedIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/><path d="M15 15l2 2 3-3"/>');
+const dbViewIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/>');
 const databaseIcon = icon(
   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
 );
@@ -112,6 +115,20 @@ function insertCallout(ctx: Ctx, type: CalloutType, fold: string) {
   view.focus();
 }
 
+/** Inserta un bloque `![[destino]]` en la línea vacía del cursor o debajo. */
+function insertEmbed(ctx: Ctx, target: string) {
+  const view = ctx.get(editorViewCtx);
+  const { state } = view;
+  const node = embedSchema.type(ctx).create({ target });
+  const $from = state.selection.$from;
+  const empty = $from.parent.content.size === 0;
+  const tr = empty
+    ? state.tr.replaceRangeWith($from.before(), $from.after(), node)
+    : state.tr.insert($from.after(), node);
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
 /** Índice: lista de los títulos (nivel 2 o más) con enlaces `[[#título]]`. */
 function tocMarkdown(ctx: Ctx) {
   const headings: { level: number; text: string }[] = [];
@@ -140,6 +157,8 @@ export interface SlashHandlers {
   requestTemplate: (insert: (markdown: string) => void) => void;
   /** Pide el nombre de una página nueva; al crearla se inserta el enlace. */
   requestPage: (insert: (target: string) => void) => void;
+  /** Pide elegir una base de datos; al elegirla se llama con su carpeta. */
+  requestDatabase: (insert: (folder: string) => void) => void;
   /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
   notify: (message: string) => void;
 }
@@ -173,6 +192,22 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestPage((target) => insertWikiLink(ctx, target));
+      },
+    });
+    group.addItem("embed", {
+      label: "Incrustar nota",
+      icon: embedIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestLink((target) => insertEmbed(ctx, target));
+      },
+    });
+    group.addItem("database-view", {
+      label: "Vista de base de datos",
+      icon: dbViewIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestDatabase((folder) => insertEmbed(ctx, `${folder}/`));
       },
     });
     group.addItem("property", {
