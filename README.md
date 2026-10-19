@@ -122,6 +122,13 @@ Contenido normal en Markdown...
 2. Abrir la app en modo desarrollo: `pnpm tauri dev`
 3. Generar el instalador: `pnpm tauri build`
 
+### Publicar una versión
+
+1. Sube el número de versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json`.
+2. Crea y sube una etiqueta: `git tag v0.1.0 && git push origin v0.1.0`.
+3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
+4. Revisa el borrador y pulsa **Publish release**.
+
 ### Índice de búsqueda
 
 Botion guarda un índice SQLite de cada bóveda en la carpeta de caché del sistema (no dentro de tus notas). Se puede borrar sin perder nada: se reconstruye solo al abrir la bóveda.
