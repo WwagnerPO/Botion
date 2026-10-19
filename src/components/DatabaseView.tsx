@@ -50,6 +50,7 @@ function configOf(db: Database): Config {
     view: db.view,
     group_by: db.group_by,
     date_by: db.date_by,
+    subfolders: db.subfolders,
   };
 }
 
@@ -120,6 +121,8 @@ export function DatabaseView({
     setDb(next);
     try {
       await saveDatabaseConfig(database.path, configOf(next));
+      // Cambiar las subcarpetas cambia qué filas hay.
+      if ("subfolders" in patch) await reload();
     } catch (e) {
       onError(String(e));
     }
@@ -295,6 +298,15 @@ export function DatabaseView({
           <span className="text-xs text-neutral-400">
             {rows.length} de {database.rows.length}
           </span>
+          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+            <input
+              type="checkbox"
+              checked={database.subfolders}
+              onChange={(e) => saveConfig({ subfolders: e.target.checked })}
+              className="accent-violet-600"
+            />
+            Incluir subcarpetas
+          </label>
           <button
             type="button"
             onClick={() => onNewRow(database.path)}
@@ -382,6 +394,11 @@ export function DatabaseView({
                     >
                       {row.error && (
                         <span className="mr-1 text-red-500">⚠</span>
+                      )}
+                      {row.subfolder && (
+                        <span className="mr-1 font-normal text-neutral-400">
+                          {row.subfolder}/
+                        </span>
                       )}
                       {row.name}
                     </button>

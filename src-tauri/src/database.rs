@@ -57,12 +57,16 @@ pub struct Config {
     pub group_by: Option<String>,
     /// Columna de fecha que coloca las notas en el calendario.
     pub date_by: Option<String>,
+    /// Incluir también las notas de las subcarpetas.
+    pub subfolders: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Row {
     pub path: String,
     pub name: String,
+    /// Subcarpeta dentro de la base de datos (`""` si está directamente).
+    pub subfolder: String,
     pub props: Props,
     /// Si el frontmatter no se puede leer, la fila se muestra sin editar.
     pub error: Option<String>,
@@ -77,6 +81,7 @@ pub struct Database {
     pub view: View,
     pub group_by: Option<String>,
     pub date_by: Option<String>,
+    pub subfolders: bool,
     pub rows: Vec<Row>,
 }
 
@@ -119,8 +124,18 @@ fn write_config(dir: &Path, config: &Config) -> Result<(), String> {
 }
 
 /// Notas que están directamente dentro de la carpeta (no en subcarpetas).
-fn row_paths(root: &Path, folder: &str) -> Result<Vec<String>, String> {
+/// Notas de la base de datos: las de la carpeta y, si se pide, las de sus
+/// subcarpetas (sin ficheros ni carpetas ocultos).
+fn row_paths(root: &Path, folder: &str, subfolders: bool) -> Result<Vec<String>, String> {
     let dir = vault::resolve_dir(root, folder)?;
+    if subfolders {
+        let tree =
+            vault::read_tree(root, &dir).map_err(|e| format!("No se pudo leer la carpeta: {e}"))?;
+        let mut paths = Vec::new();
+        vault::flatten(&tree, &mut paths);
+        paths.sort_by_key(|p| p.to_lowercase());
+        return Ok(paths);
+    }
     let mut paths: Vec<String> = fs::read_dir(&dir)
         .map_err(|e| format!("No se pudo leer la carpeta: {e}"))?
         .filter_map(Result::ok)
@@ -149,7 +164,7 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
     let dir = vault::resolve_dir(root, folder)?;
     let config = read_config(&dir);
 
-    let rows: Vec<Row> = row_paths(root, folder)?
+    let rows: Vec<Row> = row_paths(root, folder, config.subfolders)?
         .into_iter()
         .map(|path| {
             let (props, error) = match fs::read_to_string(root.join(&path))
@@ -159,7 +174,13 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
                 Ok(p) => (p, None),
                 Err(e) => (Props::new(), Some(e)),
             };
+            let inside = if folder.is_empty() {
+                path.as_str()
+            } else {
+                path.strip_prefix(&format!("{folder}/")).unwrap_or(&path)
+            };
             Row {
+                subfolder: inside.rsplit_once('/').map_or("", |(d, _)| d).to_string(),
                 name: stem(&path),
                 path,
                 props,
@@ -190,6 +211,7 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
         view: config.view,
         group_by: config.group_by,
         date_by: config.date_by,
+        subfolders: config.subfolders,
         rows,
     })
 }
@@ -209,7 +231,8 @@ fn update_rows(
     mut f: impl FnMut(&str) -> Result<Option<String>, String>,
 ) -> Result<Vec<String>, String> {
     let mut changed = Vec::new();
-    for path in row_paths(root, folder)? {
+    let subfolders = read_config(&vault::resolve_dir(root, folder)?).subfolders;
+    for path in row_paths(root, folder, subfolders)? {
         let file = root.join(&path);
         let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
         // Las notas con frontmatter no válido se dejan como están.
@@ -476,6 +499,32 @@ mod tests {
     fn configuracion_antigua_sigue_valiendo() {
         let config: Config = serde_json::from_str(r#"{"columns":[]}"#).unwrap();
         assert_eq!(config.view, View::Table);
+    }
+
+    #[test]
+    fn incluye_subcarpetas_si_se_pide() {
+        let dir = vault();
+        let root = dir.path();
+        let names = |db: &Database| -> Vec<String> {
+            db.rows
+                .iter()
+                .map(|r| format!("{}|{}", r.subfolder, r.name))
+                .collect()
+        };
+        assert!(!names(&load(root, "Tareas").unwrap()).contains(&"Sub|Otra".to_string()));
+
+        let tareas = root.join("Tareas");
+        let mut config = read_config(&tareas);
+        config.subfolders = true;
+        write_config(&tareas, &config).unwrap();
+        let db = load(root, "Tareas").unwrap();
+        assert!(names(&db).contains(&"Sub|Otra".to_string()));
+        assert!(names(&db).contains(&"|Comprar pan".to_string()));
+        assert!(db.columns.iter().any(|c| c.name == "no"));
+
+        // Renombrar también llega a las de las subcarpetas.
+        rename_property(root, "Tareas", "no", "sí").unwrap();
+        assert!(read(root, "Tareas/Sub/Otra.md").contains("sí: cuenta"));
     }
 
     #[test]
