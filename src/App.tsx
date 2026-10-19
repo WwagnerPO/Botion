@@ -35,6 +35,7 @@ import {
   deleteEntry,
   getBacklinks,
   getLastVault,
+  moveEntry,
   onNotesChanged,
   onVaultChanged,
   openVault,
@@ -550,27 +551,41 @@ export default function App() {
       onConfirm: (name) =>
         run(async () => {
           await autosaver.flush();
-          const result = await renameEntry(node.path, name);
-          await reloadTree();
-          if (database && isInside(database, node.path)) {
-            setDatabase(result.path + database.slice(node.path.length));
-          }
-          const current = noteRef.current;
-          if (current) {
-            // La nota abierta puede haber cambiado de ruta o de enlaces.
-            const path = isInside(current.path, node.path)
-              ? result.path + current.path.slice(node.path.length)
-              : current.path;
-            await openNote(path, true);
-          }
-          if (result.updated_notes > 0) {
-            setNotice(
-              `Enlaces actualizados en ${result.updated_notes} ${
-                result.updated_notes === 1 ? "nota" : "notas"
-              }.`,
-            );
-          }
+          await afterRelocate(node.path, await renameEntry(node.path, name));
         }),
+    });
+  }
+
+  /** Tras renombrar o mover: sigue en la nota o tabla abierta y avisa. */
+  async function afterRelocate(oldPath: string, result: { path: string; updated_notes: number }) {
+    await reloadTree();
+    if (database && isInside(database, oldPath)) {
+      setDatabase(result.path + database.slice(oldPath.length));
+    }
+    const current = noteRef.current;
+    if (current) {
+      // La nota abierta puede haber cambiado de ruta o de enlaces.
+      const path = isInside(current.path, oldPath)
+        ? result.path + current.path.slice(oldPath.length)
+        : current.path;
+      await openNote(path, true);
+    }
+    if (result.updated_notes > 0) {
+      setNotice(
+        `Enlaces actualizados en ${result.updated_notes} ${
+          result.updated_notes === 1 ? "nota" : "notas"
+        }.`,
+      );
+    }
+  }
+
+  /** Arrastrar en el árbol: mueve una nota o carpeta a otra carpeta. */
+  function moveTo(path: string, folder: string) {
+    const parent = path.split("/").slice(0, -1).join("/");
+    if (parent === folder || folder === path) return;
+    run(async () => {
+      await autosaver.flush();
+      await afterRelocate(path, await moveEntry(path, folder));
     });
   }
 
@@ -703,6 +718,7 @@ export default function App() {
         onNewFolder={() => newFolder()}
         onSearch={() => setSearching(true)}
         onContextMenu={handleContextMenu}
+        onMove={moveTo}
         footer={
           vault && (
             <GitPanel

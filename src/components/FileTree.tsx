@@ -7,7 +7,23 @@ interface Props {
   onSelect: (path: string) => void;
   onSelectDatabase: (path: string) => void;
   onContextMenu: (node: TreeNode, e: React.MouseEvent) => void;
+  /** Se suelta `path` (nota o carpeta) sobre la carpeta `folder`. */
+  onMove: (path: string, folder: string) => void;
   depth?: number;
+}
+
+/** Tipo de datos al arrastrar notas y carpetas del árbol. */
+export const TREE_DRAG = "text/x-botion-tree";
+
+function dragProps(path: string) {
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.dataTransfer.setData(TREE_DRAG, path);
+      e.dataTransfer.effectAllowed = "move";
+    },
+  };
 }
 
 export function FileTree({
@@ -16,6 +32,7 @@ export function FileTree({
   onSelect,
   onSelectDatabase,
   onContextMenu,
+  onMove,
   depth = 0,
 }: Props) {
   return (
@@ -29,10 +46,11 @@ export function FileTree({
             onSelect={onSelect}
             onSelectDatabase={onSelectDatabase}
             onContextMenu={onContextMenu}
+            onMove={onMove}
             depth={depth}
           />
         ) : (
-          <li key={node.path}>
+          <li key={node.path} {...dragProps(node.path)}>
             <button
               type="button"
               onClick={() => onSelect(node.path)}
@@ -60,6 +78,7 @@ function Folder({
   onSelect,
   onSelectDatabase,
   onContextMenu,
+  onMove,
   depth,
 }: Omit<Props, "nodes"> & {
   node: Extract<TreeNode, { kind: "folder" }>;
@@ -67,6 +86,7 @@ function Folder({
 }) {
   const containsSelected = !!selected?.startsWith(node.path + "/");
   const [open, setOpen] = useState(containsSelected);
+  const [dropping, setDropping] = useState(false);
 
   // Abre la carpeta si se selecciona una nota de dentro (p. ej. al crearla).
   useEffect(() => {
@@ -82,7 +102,28 @@ function Folder({
   );
 
   return (
-    <li>
+    <li
+      {...dragProps(node.path)}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(TREE_DRAG)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        const path = e.dataTransfer.getData(TREE_DRAG);
+        setDropping(false);
+        if (!path) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onMove(path, node.path);
+        setOpen(true);
+      }}
+      className={dropping ? "rounded bg-violet-100 dark:bg-violet-950" : ""}
+    >
       {node.database ? (
         // Base de datos: la flecha despliega las notas y el nombre abre la tabla.
         <div
@@ -136,6 +177,7 @@ function Folder({
           onSelect={onSelect}
           onSelectDatabase={onSelectDatabase}
           onContextMenu={onContextMenu}
+          onMove={onMove}
           depth={depth + 1}
         />
       )}

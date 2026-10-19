@@ -21,6 +21,7 @@ pub fn run() {
             files::create_note,
             files::create_folder,
             files::rename_entry,
+            files::move_entry,
             files::delete_entry,
             vault::refresh_tree,
             database::get_database,
