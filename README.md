@@ -32,7 +32,7 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Código, Tabla, Fórmula |
-| Botion | Página (crea una nota y la enlaza), Imagen, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
+| Botion | Página (crea una nota y la enlaza), Imagen, Vídeo, Audio, Archivo, YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
 
 Todo se guarda con sintaxis compatible con Obsidian:
 
@@ -45,6 +45,9 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | Vista de base de datos | `![[Carpeta/]]` (con barra final; solo Botion la dibuja) |
 | Diagrama | bloque de código `mermaid`, con vista previa |
 | Imagen | `![texto](adjuntos/foto.png)` |
+| Vídeo, audio o archivo | `![[adjuntos/clip.mp4]]` (se reproduce o se abre con su programa) |
+| YouTube | `![YouTube](https://youtu.be/…)` |
+| Icono y portada | `icono: 🚀` y `portada: violeta` en el frontmatter |
 
 ### Atajos
 
@@ -58,9 +61,17 @@ Todo se guarda con sintaxis compatible con Obsidian:
 
 En macOS, `Cmd` en lugar de `Ctrl`.
 
-### Imágenes y exportar
+### Icono y portada
+
+Pasa el ratón sobre la cabecera de la nota y pulsa «Añadir icono» o «Añadir portada» (o usa `/Icono de la página` y `/Portada`). El icono también se ve en la barra lateral.
+
+- **Icono:** cualquier emoji; el selector busca en español («cohete», «libro»…).
+- **Portada:** un color (`violeta`, `atardecer`, `océano`, `bosque`, `arena`, `noche`, `rosa`, `niebla`) o una imagen subida a `adjuntos/`.
+
+### Imágenes, archivos y exportar
 
 - Pega o arrastra una imagen en la nota (o usa `/Imagen`): se guarda en la carpeta `adjuntos/` de la bóveda y se enlaza con una ruta relativa.
+- Igual con vídeos, audios y otros archivos (`/Vídeo`, `/Audio`, `/Archivo`): los vídeos y audios se reproducen en la nota; el resto se abre con su programa.
 - «Exportar» (arriba a la derecha de la nota) o `/Exportar a…`:
   - **HTML:** un único fichero con las imágenes y los diagramas dentro.
   - **PDF:** abre el diálogo de imprimir; elige «Guardar como PDF».
@@ -68,6 +79,7 @@ En macOS, `Cmd` en lugar de `Ctrl`.
 ### Organizar
 
 - Arrastra notas o carpetas sobre otra carpeta para moverlas (o a una zona vacía para llevarlas a la raíz). Los enlaces se actualizan solos.
+- Al pasar el ratón por una carpeta, `+` crea una nota dentro y `…` abre el mismo menú que el clic derecho (también «Mostrar en el explorador»).
 
 ### Bases de datos
 
@@ -207,6 +219,8 @@ Botion tiene doble licencia; puedes elegir la que prefieras:
 
 - [MIT](LICENSE-MIT)
 - [Apache 2.0](LICENSE-APACHE)
+
+Incluye la fuente [Inter](https://rsms.me/inter/) (SIL Open Font License 1.1) y los iconos de [Lucide](https://lucide.dev) (ISC).
 
 ### Contribuciones
 

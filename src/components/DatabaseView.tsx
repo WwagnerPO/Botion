@@ -1,4 +1,13 @@
+import {
+  CalendarDays,
+  KanbanSquare,
+  Plus,
+  Search,
+  Table2,
+  Type,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { COVER_KEY, ICON_KEY } from "../lib/cover";
 import {
   KIND_LABELS,
   columnOptions,
@@ -21,6 +30,7 @@ import { BoardView } from "./BoardView";
 import { CalendarView } from "./CalendarView";
 import type { MenuItem } from "./ContextMenu";
 import type { DialogRequest } from "./Dialog";
+import { KIND_ICONS } from "./kindIcons";
 import { PropertyInput } from "./PropertyInput";
 
 interface Props {
@@ -37,11 +47,14 @@ interface Props {
 
 const KINDS = Object.keys(KIND_LABELS) as Kind[];
 
-const VIEWS: { value: View; label: string }[] = [
-  { value: "table", label: "Tabla" },
-  { value: "board", label: "Kanban" },
-  { value: "calendar", label: "Calendario" },
-];
+const VIEWS = [
+  { value: "table", label: "Tabla", Icon: Table2 },
+  { value: "board", label: "Kanban", Icon: KanbanSquare },
+  { value: "calendar", label: "Calendario", Icon: CalendarDays },
+] as const satisfies readonly { value: View; label: string; Icon: unknown }[];
+
+/** Propiedades de la cabecera de la nota: no son columnas. */
+const PAGE_KEYS = new Set([ICON_KEY, COVER_KEY]);
 
 function configOf(db: Database): Config {
   return {
@@ -68,7 +81,8 @@ export function DatabaseView({
 
   const reload = useCallback(async () => {
     try {
-      setDb(await getDatabase(path));
+      const loaded = await getDatabase(path);
+      setDb({ ...loaded, columns: loaded.columns.filter((c) => !PAGE_KEYS.has(c.name)) });
     } catch (e) {
       onError(String(e));
     }
@@ -255,15 +269,18 @@ export function DatabaseView({
   }
 
   const headerButton =
-    "flex w-full items-center gap-1 px-2 py-1.5 text-left font-medium text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800";
+    "flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[13px] font-normal text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800";
 
   return (
     <div className="flex-1 overflow-auto">
       <div className="px-10 pt-10 pb-24">
-        <p className="mb-1 text-xs text-neutral-400">
-          Base de datos · {database.path}
-        </p>
-        <h1 className="mb-4 text-3xl font-semibold">{database.name}</h1>
+        <p className="mb-2 text-xs text-neutral-400">{database.path}</p>
+        <h1 className="mb-5 flex items-center gap-3 text-[2.1rem] font-bold tracking-tight text-neutral-900 dark:text-neutral-50">
+          <span className="grid size-10 place-items-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-950 dark:text-violet-300">
+            <Table2 className="size-6" strokeWidth={1.75} />
+          </span>
+          {database.name}
+        </h1>
 
         <div
           role="tablist"
@@ -277,24 +294,28 @@ export function DatabaseView({
               role="tab"
               aria-selected={database.view === v.value}
               onClick={() => saveConfig({ view: v.value })}
-              className={`-mb-px border-b-2 px-3 py-1.5 text-sm ${
+              className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-1.5 text-sm ${
                 database.view === v.value
-                  ? "border-neutral-900 font-medium dark:border-neutral-100"
+                  ? "border-neutral-800 font-medium text-neutral-900 dark:border-neutral-200 dark:text-neutral-50"
                   : "border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
               }`}
             >
+              <v.Icon className="size-4" />
               {v.label}
             </button>
           ))}
         </div>
 
         <div className="mb-3 flex items-center gap-2">
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtrar…"
-            className="w-56 rounded-md border border-neutral-200 bg-transparent px-2 py-1 text-sm outline-none focus:border-violet-400 dark:border-neutral-700"
-          />
+          <label className="flex w-56 items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-sm focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-400/20 dark:border-neutral-700">
+            <Search className="size-3.5 shrink-0 text-neutral-400" />
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filtrar…"
+              className="w-full bg-transparent outline-none placeholder:text-neutral-400"
+            />
+          </label>
           <span className="text-xs text-neutral-400">
             {rows.length} de {database.rows.length}
           </span>
@@ -310,8 +331,9 @@ export function DatabaseView({
           <button
             type="button"
             onClick={() => onNewRow(database.path)}
-            className="ml-auto rounded-md bg-neutral-900 px-3 py-1 text-sm text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+            className="ml-auto flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
           >
+            <Plus className="size-4" />
             Nueva
           </button>
         </div>
@@ -347,6 +369,7 @@ export function DatabaseView({
                     className={headerButton}
                     onClick={(e) => columnMenu(null, e)}
                   >
+                    <Type className="size-3.5 shrink-0 text-neutral-400" />
                     Nombre{sortMark("")}
                   </button>
                 </th>
@@ -361,6 +384,10 @@ export function DatabaseView({
                       onClick={(e) => columnMenu(c, e)}
                       title={KIND_LABELS[c.kind]}
                     >
+                      {(() => {
+                        const Icon = KIND_ICONS[c.kind];
+                        return <Icon className="size-3.5 shrink-0 text-neutral-400" />;
+                      })()}
                       <span className="truncate">{c.name}</span>
                       {sortMark(c.name)}
                     </button>
@@ -374,7 +401,7 @@ export function DatabaseView({
                     aria-label="Nueva propiedad"
                     title="Nueva propiedad"
                   >
-                    +
+                    <Plus className="size-4" />
                   </button>
                 </th>
               </tr>
@@ -383,7 +410,7 @@ export function DatabaseView({
               {rows.map((row) => (
                 <tr
                   key={row.path}
-                  className="group border-b border-neutral-200 dark:border-neutral-800"
+                  className="group border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
                 >
                   <td className="border-r border-neutral-200 p-0 dark:border-neutral-800">
                     <button
@@ -394,6 +421,9 @@ export function DatabaseView({
                     >
                       {row.error && (
                         <span className="mr-1 text-red-500">⚠</span>
+                      )}
+                      {typeof row.props[ICON_KEY] === "string" && (
+                        <span className="mr-1.5">{row.props[ICON_KEY] as string}</span>
                       )}
                       {row.subfolder && (
                         <span className="mr-1 font-normal text-neutral-400">

@@ -11,7 +11,7 @@ export type TreeNode =
       database: boolean;
       children: TreeNode[];
     }
-  | { kind: "note"; name: string; path: string };
+  | { kind: "note"; name: string; path: string; icon?: string };
 
 export interface Vault {
   name: string;

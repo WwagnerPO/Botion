@@ -1,11 +1,12 @@
+import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { applyTheme, getTheme, type Theme } from "../lib/theme";
 
-const OPTIONS: { value: Theme; label: string }[] = [
-  { value: "light", label: "Claro" },
-  { value: "dark", label: "Oscuro" },
-  { value: "system", label: "Sistema" },
-];
+const OPTIONS = [
+  { value: "light", label: "Claro", Icon: Sun },
+  { value: "dark", label: "Oscuro", Icon: Moon },
+  { value: "system", label: "Sistema", Icon: Monitor },
+] as const satisfies readonly { value: Theme; label: string; Icon: unknown }[];
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getTheme);
@@ -25,7 +26,7 @@ export function ThemeToggle() {
     <div
       role="radiogroup"
       aria-label="Tema"
-      className="flex rounded-md bg-neutral-200/70 p-0.5 text-xs dark:bg-neutral-800"
+      className="flex rounded-lg bg-neutral-200/60 p-0.5 text-xs dark:bg-neutral-800/80"
     >
       {OPTIONS.map((o) => (
         <button
@@ -34,12 +35,14 @@ export function ThemeToggle() {
           role="radio"
           aria-checked={theme === o.value}
           onClick={() => choose(o.value)}
-          className={`flex-1 rounded px-2 py-1 ${
+          title={o.label}
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 transition-colors ${
             theme === o.value
               ? "bg-white font-medium text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-neutral-100"
               : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
           }`}
         >
+          <o.Icon className="size-3.5" />
           {o.label}
         </button>
       ))}

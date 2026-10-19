@@ -9,6 +9,7 @@ import {
   calloutTitleSchema,
   type CalloutType,
 } from "./callout";
+import { youtubeId } from "./attachments";
 import { embedSchema } from "./embed";
 import { highlightSchema } from "./highlight";
 import { wikiLinkSchema } from "./wikilink";
@@ -49,6 +50,13 @@ const diagramIcon = icon(
 const imageIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>');
 const embedIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/><path d="M15 15l2 2 3-3"/>');
 const dbViewIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/>');
+const emojiIcon = icon('<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>');
+const pageEmojiIcon = icon('<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M10 15a3 3 0 0 0 4 0M10.5 11.5h.01M13.5 11.5h.01"/>');
+const coverIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M3 4h18v6H3z" fill="currentColor" stroke="none" opacity=".25"/>');
+const videoIcon = icon('<rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>');
+const audioIcon = icon('<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>');
+const fileIcon = icon('<path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7-7l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>');
+const youtubeIcon = icon('<rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.5v5l4.5-2.5z"/>');
 const databaseIcon = icon(
   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
 );
@@ -147,6 +155,21 @@ function tocMarkdown(ctx: Ctx) {
     .join("\n");
 }
 
+/** Posición en pantalla del cursor, para abrir selectores junto a él. */
+function caret(ctx: Ctx) {
+  const view = ctx.get(editorViewCtx);
+  const { left, bottom } = view.coordsAtPos(view.state.selection.from);
+  return { x: left, y: bottom + 6 };
+}
+
+/** Inserta un nodo de imagen (también vídeos de YouTube) en el cursor. */
+function insertImage(ctx: Ctx, src: string, alt: string) {
+  const view = ctx.get(editorViewCtx);
+  const node = view.state.schema.nodes.image.create({ src, alt });
+  view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
+  view.focus();
+}
+
 export interface SlashHandlers {
   /** Pide elegir una nota; al elegirla se llama a `insert` con su destino. */
   requestLink: (insert: (target: string) => void) => void;
@@ -162,8 +185,16 @@ export interface SlashHandlers {
   requestDatabase: (insert: (folder: string) => void) => void;
   /** Exportar la nota abierta. */
   exportNote: (format: "html" | "pdf") => void;
-  /** Elige una imagen y la guarda como adjunto; devuelve su enlace. */
-  pickImage: () => Promise<string | null>;
+  /** Elige un fichero, lo guarda como adjunto y devuelve su enlace. */
+  pickAttachment: (accept: string) => Promise<string | null>;
+  /** Abre el selector de emojis junto al cursor. */
+  requestEmoji: (at: { x: number; y: number }, pick: (emoji: string) => void) => void;
+  /** Pone el icono de la nota (propiedad `icono`). */
+  setPageIcon: (emoji: string) => void;
+  /** Añade una portada a la nota (propiedad `portada`). */
+  addCover: () => void;
+  /** Pide una dirección web; al darla se llama a `insert`. */
+  requestUrl: (title: string, insert: (url: string) => void) => void;
   /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
   notify: (message: string) => void;
 }
@@ -204,14 +235,65 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       icon: imageIcon,
       onRun: (ctx) => {
         clearSlash(ctx);
-        handlers.pickImage().then((src) => {
+        handlers.pickAttachment("image/*").then((src) => {
           if (!src) return;
-          const view = ctx.get(editorViewCtx);
-          const alt = decodeURI(src).split("/").pop()!.replace(/\.[^.]+$/, "");
-          const node = view.state.schema.nodes.image.create({ src, alt });
-          view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
-          view.focus();
+          insertImage(ctx, src, decodeURI(src).split("/").pop()!.replace(/\.[^.]+$/, ""));
         });
+      },
+    });
+    // Vídeo, audio y otros ficheros: se guardan en adjuntos/ y se incrustan
+    // con ![[adjuntos/fichero]], igual que en Obsidian.
+    const attachments = [
+      { key: "video", label: "Vídeo", icon: videoIcon, accept: "video/*" },
+      { key: "audio", label: "Audio", icon: audioIcon, accept: "audio/*" },
+      { key: "file", label: "Archivo", icon: fileIcon, accept: "" },
+    ];
+    for (const a of attachments) {
+      group.addItem(a.key, {
+        label: a.label,
+        icon: a.icon,
+        onRun: (ctx) => {
+          clearSlash(ctx);
+          handlers.pickAttachment(a.accept).then((link) => {
+            if (link) insertEmbed(ctx, `adjuntos/${decodeURI(link).split("/").pop()}`);
+          });
+        },
+      });
+    }
+    group.addItem("youtube", {
+      label: "YouTube",
+      icon: youtubeIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestUrl("Vídeo de YouTube", (url) =>
+          youtubeId(url)
+            ? insertImage(ctx, url, "YouTube")
+            : handlers.notify("Ese enlace no es de un vídeo de YouTube."),
+        );
+      },
+    });
+    group.addItem("emoji", {
+      label: "Emoji",
+      icon: emojiIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestEmoji(caret(ctx), (emoji) => insertText(ctx, emoji));
+      },
+    });
+    group.addItem("page-icon", {
+      label: "Icono de la página",
+      icon: pageEmojiIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestEmoji(caret(ctx), handlers.setPageIcon);
+      },
+    });
+    group.addItem("cover", {
+      label: "Portada",
+      icon: coverIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.addCover();
       },
     });
     group.addItem("embed", {

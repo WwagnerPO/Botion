@@ -1,3 +1,4 @@
+import { FileText, Plus, Search, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { searchNotes, type SearchHit } from "../lib/vault";
 
@@ -13,6 +14,8 @@ interface Props {
   allowCreate?: boolean;
   /** Título de la lista sin consulta. */
   recentLabel?: string;
+  /** Icono de cada resultado. */
+  icon?: LucideIcon;
 }
 
 type Item = { kind: "hit"; hit: SearchHit } | { kind: "create"; name: string };
@@ -62,6 +65,7 @@ export function SearchPalette({
   source = searchNotes,
   allowCreate = true,
   recentLabel = "Recientes",
+  icon: Icon = FileText,
 }: Props) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -127,15 +131,17 @@ export function SearchPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-[12vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-neutral-900/25 pt-[12vh] backdrop-blur-[1px] dark:bg-black/50"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Buscar notas"
-        className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
+        className="flex max-h-[70vh] w-full max-w-xl animate-pop flex-col overflow-hidden rounded-xl bg-white shadow-pop dark:bg-neutral-800"
       >
+        <div className="flex items-center gap-3 border-b border-neutral-200 px-4 dark:border-neutral-700">
+        <Search className="size-4 shrink-0 text-neutral-400" />
         <input
           ref={inputRef}
           value={query}
@@ -146,8 +152,9 @@ export function SearchPalette({
           aria-expanded="true"
           aria-controls="search-results"
           aria-activedescendant={items.length ? `search-item-${active}` : undefined}
-          className="border-b border-neutral-200 bg-transparent px-4 py-3 text-base outline-none dark:border-neutral-800"
+          className="w-full bg-transparent py-3 text-base outline-none placeholder:text-neutral-400"
         />
+        </div>
         <ul
           ref={listRef}
           id="search-results"
@@ -168,10 +175,16 @@ export function SearchPalette({
               aria-selected={i === active}
               onMouseMove={() => setActive(i)}
               onClick={() => choose(item)}
-              className={`cursor-pointer rounded-md px-3 py-2 ${
-                i === active ? "bg-neutral-100 dark:bg-neutral-800" : ""
+              className={`flex cursor-pointer gap-3 rounded-lg px-3 py-2 ${
+                i === active ? "bg-neutral-100 dark:bg-neutral-700/60" : ""
               }`}
             >
+              {item.kind === "hit" ? (
+                <Icon className="mt-0.5 size-4 shrink-0 text-neutral-400" strokeWidth={1.75} />
+              ) : (
+                <Plus className="mt-0.5 size-4 shrink-0 text-neutral-400" />
+              )}
+              <div className="min-w-0 flex-1">
               {item.kind === "hit" ? (
                 <>
                   <div className="flex items-baseline gap-2">
@@ -194,6 +207,7 @@ export function SearchPalette({
                   {item.name}»
                 </span>
               )}
+              </div>
             </li>
           ))}
           {query && items.length === 0 && (
@@ -202,10 +216,10 @@ export function SearchPalette({
             </li>
           )}
         </ul>
-        <div className="flex gap-4 border-t border-neutral-200 px-4 py-2 text-xs text-neutral-400 dark:border-neutral-800">
-          <span>↑↓ moverse</span>
-          <span>↵ abrir</span>
-          <span>Esc cerrar</span>
+        <div className="flex gap-4 border-t border-neutral-200 px-4 py-2 text-xs text-neutral-400 dark:border-neutral-700">
+          <span><kbd>↑</kbd> <kbd>↓</kbd> moverse</span>
+          <span><kbd>↵</kbd> abrir</span>
+          <span><kbd>Esc</kbd> cerrar</span>
         </div>
       </div>
     </div>

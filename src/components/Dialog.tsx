@@ -56,7 +56,7 @@ export function Dialog({ request, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-[20vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-neutral-900/25 pt-[20vh] backdrop-blur-[1px] dark:bg-black/50"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={(e) => e.key === "Escape" && onClose()}
     >
@@ -65,7 +65,7 @@ export function Dialog({ request, onClose }: Props) {
         aria-modal="true"
         aria-labelledby="dialog-title"
         onSubmit={submit}
-        className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-5 shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
+        className="w-full max-w-sm animate-pop rounded-xl bg-white p-5 shadow-pop dark:bg-neutral-800"
       >
         <h2 id="dialog-title" className="text-base font-semibold">
           {request.title}
@@ -77,7 +77,7 @@ export function Dialog({ request, onClose }: Props) {
               ref={inputRef}
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-neutral-300 bg-transparent px-3 py-2 text-neutral-900 outline-none focus:border-violet-500 dark:border-neutral-700 dark:text-neutral-100"
+              className="mt-1.5 block w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-neutral-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
             />
           </label>
         ) : (
@@ -89,7 +89,7 @@ export function Dialog({ request, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            className="rounded-md px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
           >
             Cancelar
           </button>
@@ -99,8 +99,8 @@ export function Dialog({ request, onClose }: Props) {
             disabled={busy}
             className={`rounded-md px-3 py-1.5 font-medium text-white disabled:opacity-50 ${
               request.kind === "confirm" && request.danger
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-neutral-900 hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+                ? "bg-red-600 shadow-sm hover:bg-red-700"
+                : "bg-violet-600 shadow-sm hover:bg-violet-700"
             }`}
           >
             {request.confirm}

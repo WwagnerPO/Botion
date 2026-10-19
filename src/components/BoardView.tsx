@@ -78,7 +78,7 @@ export function BoardView({
         <select
           value={column.name}
           onChange={(e) => onGroupBy(e.target.value)}
-          className="rounded border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700"
+          className="rounded-md border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700 dark:bg-neutral-900"
         >
           {candidates.map((c) => (
             <option key={c.name} value={c.name}>
@@ -100,10 +100,10 @@ export function BoardView({
               }}
               onDragLeave={() => setDragOver((g) => (g === group ? null : g))}
               onDrop={(e) => drop(e, group)}
-              className={`w-64 shrink-0 rounded-lg p-2 ${
+              className={`w-64 shrink-0 rounded-xl p-2 transition-colors ${
                 dragOver === group
-                  ? "bg-violet-100 dark:bg-violet-950"
-                  : "bg-neutral-100 dark:bg-neutral-800/60"
+                  ? "bg-violet-100 ring-1 ring-violet-300 dark:bg-violet-950 dark:ring-violet-800"
+                  : "bg-neutral-50 dark:bg-neutral-900"
               }`}
             >
               <header className="mb-2 flex items-center gap-2 px-1 text-sm">
@@ -123,14 +123,15 @@ export function BoardView({
                       e.dataTransfer.setData("text/x-botion-row", row.path);
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    className="cursor-grab rounded-md border border-neutral-200 bg-white p-2 shadow-sm active:cursor-grabbing dark:border-neutral-700 dark:bg-neutral-900"
+                    className="cursor-grab rounded-lg bg-white p-2.5 shadow-[0_0_0_1px_rgb(15_15_15/0.06),0_2px_4px_rgb(15_15_15/0.06)] transition-shadow hover:shadow-[0_0_0_1px_rgb(15_15_15/0.08),0_4px_10px_rgb(15_15_15/0.1)] active:cursor-grabbing dark:bg-neutral-800 dark:shadow-[0_0_0_1px_rgb(255_255_255/0.06)]"
                   >
                     <button
                       type="button"
                       onClick={() => onOpenNote(row.path)}
-                      className="block w-full truncate text-left text-sm font-medium hover:underline"
+                      className="flex w-full items-center gap-1.5 truncate text-left text-sm font-medium hover:underline"
                     >
-                      {row.name}
+                      {typeof row.props.icono === "string" && <span>{row.props.icono}</span>}
+                      <span className="truncate">{row.name}</span>
                     </button>
                     {others.map((c) => {
                       const v = row.props[c.name];
@@ -160,7 +161,7 @@ export function BoardView({
                 onClick={() =>
                   onNewRow(group === NONE ? {} : { [column.name]: group })
                 }
-                className="mt-2 w-full rounded px-2 py-1 text-left text-sm text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+                className="mt-2 w-full rounded-md px-2 py-1 text-left text-sm text-neutral-400 hover:bg-neutral-200/60 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
                 + Nueva
               </button>

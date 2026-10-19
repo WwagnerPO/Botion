@@ -7,10 +7,17 @@ import { createRoot } from "react-dom/client";
 import { callout } from "../lib/callout";
 import { embed, embedSchema } from "../lib/embed";
 import { Embed, type EmbedHost } from "./Embed";
+import { EmojiPicker } from "./EmojiPicker";
 import { $view } from "@milkdown/kit/utils";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
 import { imageSchema } from "@milkdown/kit/preset/commonmark";
-import { displayUrl, saveAttachment } from "../lib/attachments";
+import {
+  displayUrl,
+  linkToVaultPath,
+  pickFile,
+  saveAttachment,
+  youtubeId,
+} from "../lib/attachments";
 import { highlight, highlightSchema, toggleHighlightCommand } from "../lib/highlight";
 import { renderMermaidPreview } from "../lib/mermaid";
 import { buildBotionMenu } from "../lib/slashCommands";
@@ -50,24 +57,17 @@ interface Props {
   vaultRoot: string;
   notePath: string;
   onError: (message: string) => void;
+  /** Comandos «/Icono de la página» y «/Portada». */
+  onSetPageIcon: (emoji: string) => void;
+  onAddCover: () => void;
+  /** Pide una dirección web (comando «/YouTube»). */
+  onRequestUrl: (title: string, insert: (url: string) => void) => void;
 }
 
 /**
  * Editor visual de Markdown. Se monta una vez por nota: para cambiar de
  * nota, el padre cambia la `key` del componente.
  */
-/** Abre el selector de ficheros del sistema y devuelve el elegido. */
-function pickFile(accept: string): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = accept;
-    input.onchange = () => resolve(input.files?.[0] ?? null);
-    input.oncancel = () => resolve(null);
-    input.click();
-  });
-}
-
 export function Editor({
   initialValue,
   onChange,
@@ -87,7 +87,17 @@ export function Editor({
   onExport,
   findOpen,
   onCloseFind,
+  onSetPageIcon,
+  onAddCover,
+  onRequestUrl,
 }: Props) {
+  const [emojiPicker, setEmojiPicker] = useState<{
+    x: number;
+    y: number;
+    pick: (emoji: string) => void;
+  } | null>(null);
+  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl });
+  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl };
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -187,8 +197,12 @@ export function Editor({
             notify: (message) => onNotifyRef.current(message),
             requestDatabase: (insert) => onRequestDatabaseRef.current(insert),
             exportNote: (format) => onExportRef.current(format),
-            pickImage: async () => {
-              const file = await pickFile("image/*");
+            requestEmoji: (at, pick) => setEmojiPicker({ ...at, pick }),
+            setPageIcon: (emoji) => pageRef.current.onSetPageIcon(emoji),
+            addCover: () => pageRef.current.onAddCover(),
+            requestUrl: (title, insert) => pageRef.current.onRequestUrl(title, insert),
+            pickAttachment: async (accept) => {
+              const file = await pickFile(accept);
               if (!file) return null;
               try {
                 return await saveAttachment(notePath, file);
@@ -207,6 +221,8 @@ export function Editor({
       readNote: (p) => embedHostRef.current.readNote(p),
       getDatabase: (p) => embedHostRef.current.getDatabase(p),
       open: (p, kind) => embedHostRef.current.open(p, kind),
+      fileUrl: (p) => embedHostRef.current.fileUrl(p),
+      openFile: (p) => embedHostRef.current.openFile(p),
     };
     const embedView = $view(embedSchema.node, () => (initial) => {
       const dom = document.createElement("div");
@@ -241,11 +257,15 @@ export function Editor({
           uploader: async (files, schema) => {
             const nodes = [];
             for (const file of Array.from(files)) {
-              if (!file.type.startsWith("image/")) continue;
               try {
                 const src = await saveAttachment(notePath, file);
                 const alt = file.name.replace(/\.[^.]+$/, "");
-                nodes.push(schema.nodes.image.create({ src, alt }));
+                // Las imágenes se ven en línea; el resto se incrusta como bloque.
+                nodes.push(
+                  file.type.startsWith("image/")
+                    ? schema.nodes.image.create({ src, alt })
+                    : schema.nodes.embed.create({ target: linkToVaultPath(src) }),
+                );
               } catch (e) {
                 onErrorRef.current(String(e));
               }
@@ -259,6 +279,20 @@ export function Editor({
     // Imágenes: la ruta relativa de la nota se convierte en una que la app
     // puede mostrar, sin tocar lo que se guarda.
     const imageView = $view(imageSchema.node, () => (initial) => {
+      // ![](https://youtube.com/…): el vídeo se reproduce en la nota, como en Obsidian.
+      const video = youtubeId(initial.attrs.src);
+      if (video) {
+        const frame = document.createElement("iframe");
+        frame.className = "youtube-embed";
+        frame.src = `https://www.youtube-nocookie.com/embed/${video}`;
+        frame.title = initial.attrs.alt || "YouTube";
+        frame.allow = "encrypted-media; picture-in-picture; fullscreen";
+        frame.referrerPolicy = "strict-origin-when-cross-origin";
+        return {
+          dom: frame,
+          update: (node) => node.type.name === "image" && youtubeId(node.attrs.src) === video,
+        };
+      }
       const img = document.createElement("img");
       img.className = "note-image";
       const apply = (node: typeof initial) => {
@@ -355,6 +389,17 @@ export function Editor({
         />
       )}
       <div ref={rootRef} className="botion-editor" onClick={handleClick} />
+      {emojiPicker && (
+        <EmojiPicker
+          x={emojiPicker.x}
+          y={emojiPicker.y}
+          onPick={emojiPicker.pick}
+          onClose={() => {
+            setEmojiPicker(null);
+            withView((view) => view.focus());
+          }}
+        />
+      )}
     </>
   );
 
@@ -394,7 +439,7 @@ function FindBar({
   };
 
   return (
-    <div className="no-print sticky top-2 z-20 mx-14 mb-2 flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+    <div className="no-print sticky top-12 z-20 mx-14 mb-2 flex animate-pop items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm shadow-pop dark:bg-neutral-800">
       <input
         ref={inputRef}
         value={query}

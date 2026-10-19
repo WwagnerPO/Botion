@@ -41,7 +41,7 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
       ref={ref}
       role="menu"
       style={{ left, top }}
-      className="fixed z-50 w-48 rounded-md border border-neutral-200 bg-white p-1 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-800"
+      className="fixed z-50 w-52 animate-pop rounded-lg bg-white p-1 text-sm shadow-pop dark:bg-neutral-800"
     >
       {items.map((item) => (
         <button
@@ -52,7 +52,7 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
             onClose();
             item.onSelect();
           }}
-          className={`block w-full rounded px-3 py-1.5 text-left hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none dark:hover:bg-neutral-700 dark:focus:bg-neutral-700 ${
+          className={`block w-full rounded-md px-2.5 py-1.5 text-left hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none dark:hover:bg-neutral-700/70 dark:focus:bg-neutral-700/70 ${
             item.danger ? "text-red-600 dark:text-red-400" : ""
           }`}
         >

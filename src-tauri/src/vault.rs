@@ -32,6 +32,9 @@ pub enum TreeNode {
     Note {
         name: String,
         path: String,
+        /// Emoji de la propiedad `icono` del frontmatter, si tiene.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        icon: Option<String>,
     },
 }
 
@@ -62,6 +65,24 @@ fn relative(root: &Path, path: &Path) -> String {
         .join("/")
 }
 
+/// Propiedad `icono` del frontmatter. Solo lee el principio del fichero,
+/// para que abrir una bóveda grande siga siendo rápido.
+fn note_icon(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut head = [0u8; 2048];
+    let n = fs::File::open(path).ok()?.read(&mut head).ok()?;
+    let text = String::from_utf8_lossy(&head[..n]);
+    let mut lines = text.lines();
+    if lines.next()?.trim_end() != "---" {
+        return None;
+    }
+    lines
+        .take_while(|l| l.trim_end() != "---")
+        .find_map(|l| l.strip_prefix("icono:"))
+        .map(|v| v.trim().trim_matches(['"', '\'']).to_string())
+        .filter(|v| !v.is_empty() && v.chars().count() <= 8)
+}
+
 /// Lee una carpeta de forma recursiva. Ignora ficheros y carpetas ocultos
 /// (`.git`, `.obsidian`...) y cualquier fichero que no sea `.md`.
 pub fn read_tree(root: &Path, dir: &Path) -> std::io::Result<Vec<TreeNode>> {
@@ -87,6 +108,7 @@ pub fn read_tree(root: &Path, dir: &Path) -> std::io::Result<Vec<TreeNode>> {
         } else if file_type.is_file() && is_markdown(&path) {
             notes.push(TreeNode::Note {
                 name: name[..name.len() - 3].to_string(),
+                icon: note_icon(&path),
                 path: relative(root, &path),
             });
         }
@@ -336,6 +358,7 @@ mod tests {
                     children: vec![TreeNode::Note {
                         name: "botion".into(),
                         path: "Proyectos/botion.md".into(),
+                        icon: None,
                     }],
                 },
                 TreeNode::Folder {
@@ -347,13 +370,41 @@ mod tests {
                 TreeNode::Note {
                     name: "Alfa".into(),
                     path: "Alfa.md".into(),
+                    icon: None,
                 },
                 TreeNode::Note {
                     name: "zeta".into(),
                     path: "zeta.md".into(),
+                    icon: None,
                 },
             ]
         );
+    }
+
+    #[test]
+    fn icono_del_frontmatter() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::write(
+            root.join("a.md"),
+            "---\nestado: x\nicono: \"🚀\"\n---\n# A\n",
+        )
+        .unwrap();
+        fs::write(root.join("b.md"), "# B\nicono: 🚀\n").unwrap();
+        fs::write(
+            root.join("c.md"),
+            "---\nicono: un texto demasiado largo\n---\n",
+        )
+        .unwrap();
+        let icons: Vec<_> = read_tree(root, root)
+            .unwrap()
+            .into_iter()
+            .map(|n| match n {
+                TreeNode::Note { icon, .. } => icon,
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(icons, [Some("🚀".to_string()), None, None]);
     }
 
     #[test]

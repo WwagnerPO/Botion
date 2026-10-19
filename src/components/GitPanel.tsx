@@ -1,3 +1,4 @@
+import { GitBranch, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   describeSync,
@@ -170,16 +171,17 @@ export function GitPanel({ root, beforeSync, onSynced, onError }: Props) {
             setBusy(false);
           }
         }}
-        className="w-full rounded-md px-2 py-1 text-left text-xs text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 disabled:opacity-50 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 disabled:opacity-50 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
         title="Guarda el historial de la bóveda con Git"
       >
+        <GitBranch className="size-3.5" />
         Activar historial con Git
       </button>
     );
   }
 
   const pending = [
-    status.changes > 0 && `${status.changes} sin guardar`,
+    status.changes > 0 && `${status.changes} ${status.changes === 1 ? "cambio" : "cambios"}`,
     status.ahead > 0 && `${status.ahead} por subir`,
     status.behind > 0 && `${status.behind} por bajar`,
   ].filter(Boolean);
@@ -187,24 +189,29 @@ export function GitPanel({ root, beforeSync, onSynced, onError }: Props) {
   return (
     <div className="space-y-1 text-xs">
       {conflictDialog}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-1">
+        <GitBranch className="size-3.5 shrink-0 text-neutral-400" />
         <span className="min-w-0 flex-1 truncate text-neutral-500" title={status.remote ?? "Sin remoto: solo historial local"}>
-          Git · {status.branch ?? "sin rama"}
-          {pending.length > 0 ? ` · ${pending.join(", ")}` : " · al día"}
+          {status.branch ?? "sin rama"}
+          <span className={pending.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}>
+            {pending.length > 0 ? ` · ${pending.join(", ")}` : " · al día"}
+          </span>
         </span>
         <button
           type="button"
           disabled={busy}
           onClick={() => sync()}
-          className="shrink-0 rounded px-2 py-0.5 text-neutral-600 hover:bg-neutral-200 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-200/80 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          title="Guardar, bajar y subir cambios"
         >
+          <RefreshCw className={`size-3 ${busy ? "animate-spin" : ""}`} />
           {busy ? "Sincronizando…" : "Sincronizar"}
         </button>
       </div>
       {!status.remote && (
-        <p className="text-neutral-400">Sin remoto: el historial se guarda solo en este ordenador.</p>
+        <p className="px-1 text-neutral-400">Sin remoto: el historial se guarda solo en este ordenador.</p>
       )}
-      <label className="flex items-center gap-1.5 text-neutral-500">
+      <label className="flex items-center gap-1.5 px-1 text-neutral-500">
         <input
           type="checkbox"
           checked={auto}
