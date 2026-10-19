@@ -1,20 +1,13 @@
 import { useState } from "react";
-import type { Column, Database, PropValue, Props, Row } from "../lib/database";
+import { COMPUTED_KINDS, type Column, type Row } from "../lib/database";
+import { valueOf } from "../lib/dbview";
 import { today } from "../lib/slashCommands";
-
-interface Props_ {
-  db: Database;
-  rows: Row[];
-  onOpenNote: (path: string) => void;
-  onChangeValue: (rowPath: string, column: string, value: PropValue) => void;
-  onNewRow: (preset: Props) => void;
-  onDateBy: (column: string) => void;
-}
+import type { ViewProps } from "./viewProps";
 
 const WEEKDAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
 
 export function dateColumns(columns: Column[]) {
-  return columns.filter((c) => c.kind === "date");
+  return columns.filter((c) => ["date", "created", "edited", "formula"].includes(c.kind));
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -37,12 +30,14 @@ function monthGrid(year: number, month: number): Date[] {
 /** Vista calendario: cada nota en el día de una propiedad de fecha. */
 export function CalendarView({
   db,
+  view,
   rows,
-  onOpenNote,
+  ctx,
+  onPeek,
   onChangeValue,
   onNewRow,
-  onDateBy,
-}: Props_) {
+  onUpdateView,
+}: ViewProps) {
   const now = new Date();
   const [month, setMonth] = useState({
     year: now.getFullYear(),
@@ -50,7 +45,10 @@ export function CalendarView({
   });
   const [dragOver, setDragOver] = useState<string | null>(null);
   const candidates = dateColumns(db.columns);
-  const column = candidates.find((c) => c.name === db.date_by) ?? candidates[0];
+  const column =
+    candidates.find((c) => c.name === view.date_by) ??
+    candidates.find((c) => c.kind === "date") ??
+    candidates[0];
 
   if (!column) {
     return (
@@ -64,12 +62,13 @@ export function CalendarView({
   const byDay = new Map<string, Row[]>();
   let undated = 0;
   for (const row of rows) {
-    const v = row.props[column.name];
-    if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const v = valueOf(row, column.name, ctx);
+    if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(v)) {
       undated++;
       continue;
     }
-    byDay.set(v, [...(byDay.get(v) ?? []), row]);
+    const day = v.slice(0, 10);
+    byDay.set(day, [...(byDay.get(day) ?? []), row]);
   }
 
   const monthName = new Date(month.year, month.month, 1).toLocaleDateString(
@@ -91,6 +90,7 @@ export function CalendarView({
     const path = e.dataTransfer.getData("text/x-botion-row");
     if (
       path &&
+      !COMPUTED_KINDS.has(column!.kind) &&
       rows.find((r) => r.path === path)?.props[column!.name] !== day
     ) {
       onChangeValue(path, column!.name, day);
@@ -133,7 +133,7 @@ export function CalendarView({
           Fecha
           <select
             value={column.name}
-            onChange={(e) => onDateBy(e.target.value)}
+            onChange={(e) => onUpdateView({ date_by: e.target.value })}
             className="rounded-md border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700 dark:bg-neutral-900"
           >
             {candidates.map((c) => (
@@ -189,7 +189,7 @@ export function CalendarView({
                 </span>
                 <button
                   type="button"
-                  onClick={() => onNewRow({ [column.name]: day })}
+                  onClick={() => onNewRow(COMPUTED_KINDS.has(column.kind) ? {} : { [column.name]: day })}
                   className="invisible rounded px-1 text-xs text-neutral-400 group-hover:visible hover:bg-neutral-200 dark:hover:bg-neutral-700"
                   aria-label={`Nueva nota el ${day}`}
                 >
@@ -208,7 +208,7 @@ export function CalendarView({
                   >
                     <button
                       type="button"
-                      onClick={() => onOpenNote(row.path)}
+                      onClick={() => onPeek(row.path)}
                       className="block w-full cursor-grab truncate rounded-md bg-white px-1.5 py-0.5 text-left text-xs shadow-[0_0_0_1px_rgb(15_15_15/0.08),0_1px_2px_rgb(15_15_15/0.06)] hover:bg-neutral-50 dark:bg-neutral-800 dark:shadow-[0_0_0_1px_rgb(255_255_255/0.08)] dark:hover:bg-neutral-700"
                     >
                       {typeof row.props.icono === "string" && `${row.props.icono} `}

@@ -45,6 +45,9 @@ jobs:
       - name: Tipos y build de la interfaz
         run: pnpm build
 
+      - name: Pruebas de la interfaz
+        run: pnpm test
+
       - name: Formato de Rust
         working-directory: src-tauri
         run: cargo fmt --check

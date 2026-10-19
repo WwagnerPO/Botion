@@ -1,12 +1,12 @@
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 import { ExternalLink, FileText, Paperclip } from "lucide-react";
 import { useEffect, useState } from "react";
 import { attachmentPath, fileKind } from "../lib/attachments";
 import { splitFrontmatter } from "../lib/frontmatter";
+import { toHtml } from "../lib/preview";
 import { isDatabaseEmbed } from "../lib/embed";
-import { valueText, type Database } from "../lib/database";
-import { Pill, formatDate } from "./PropertyInput";
+import { activeView, type Database } from "../lib/database";
+import { cell, viewRows } from "../lib/dbview";
+import { CellView } from "./PropertyInput";
 
 /** Lo que una incrustación necesita de la app. */
 export interface EmbedHost {
@@ -50,16 +50,6 @@ function FileEmbed({ target, host }: { target: string; host: EmbedHost }) {
       </button>
     </div>
   );
-}
-
-/** Markdown de una nota → HTML seguro, con los extras de Botion básicos. */
-function toHtml(markdown: string) {
-  const prepared = markdown
-    .replace(/!\[\[([^\]]+)\]\]/g, "↳ $1")
-    .replace(/\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_, t, alias) => `**${alias ?? t}**`)
-    .replace(/==([^=\n]+)==/g, "<mark>$1</mark>")
-    .replace(/^> \[!(\w+)\][+-]? ?(.*)$/gm, (_, type, title) => `> **${title || type}**`);
-  return DOMPurify.sanitize(marked.parse(prepared, { async: false }) as string);
 }
 
 export function Embed({ target, host }: { target: string; host: EmbedHost }) {
@@ -131,11 +121,17 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
   }
 
   const { db } = state;
-  const columns = db.columns.slice(0, 5);
-  const rows = db.rows.slice(0, 20);
+  // La vista abierta de la base de datos: sus filtros, orden y columnas.
+  const view = activeView(db);
+  const ctx = { db, related: {} };
+  const all = viewRows(view, ctx);
+  const columns = db.columns
+    .filter((c) => !view.hidden.includes(c.name) && c.name !== "icono" && c.name !== "portada")
+    .slice(0, 5);
+  const rows = all.slice(0, 20);
   return (
     <div className="embed-box">
-      {header(`${db.name} · ${db.rows.length} ${db.rows.length === 1 ? "nota" : "notas"}`, () =>
+      {header(`${db.name} · ${view.name} · ${all.length} ${all.length === 1 ? "nota" : "notas"}`, () =>
         host.open(db.path, "database"),
       )}
       <div className="embed-table">
@@ -157,20 +153,10 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
                   </button>
                 </td>
                 {columns.map((c) => {
-                  const v = r.props[c.name];
+                  const v = cell(r, c, ctx);
                   return (
                     <td key={c.name}>
-                      {c.kind === "select" || c.kind === "tags"
-                        ? (Array.isArray(v) ? v : valueText(v) ? [String(v)] : []).map((t) => (
-                            <Pill key={t} text={t} />
-                          ))
-                        : c.kind === "checkbox"
-                          ? v === true
-                            ? "✓"
-                            : ""
-                          : c.kind === "date"
-                            ? formatDate(valueText(v))
-                            : valueText(v)}
+                      <CellView kind={c.kind} value={v.value} error={v.error} alignNumbers={false} />
                     </td>
                   );
                 })}
@@ -178,8 +164,8 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
             ))}
           </tbody>
         </table>
-        {db.rows.length > rows.length && (
-          <p className="embed-muted">Y {db.rows.length - rows.length} más…</p>
+        {all.length > rows.length && (
+          <p className="embed-muted">Y {all.length - rows.length} más…</p>
         )}
       </div>
     </div>

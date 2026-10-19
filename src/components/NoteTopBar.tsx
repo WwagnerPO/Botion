@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Share } from "lucide-react";
+import { ChevronRight, FileText, History, Share, Star } from "lucide-react";
 
 interface Props {
   path: string;
@@ -7,10 +7,25 @@ interface Props {
   isDatabase: (folder: string) => boolean;
   onOpenDatabase: (folder: string) => void;
   onExport: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  favorite: boolean;
+  onToggleFavorite: () => void;
+  onHistory: () => void;
 }
 
 /** Barra fija sobre la nota: dónde está, si se ha guardado y exportar. */
-export function NoteTopBar({ path, icon, status, isDatabase, onOpenDatabase, onExport }: Props) {
+export function NoteTopBar({
+  path,
+  icon,
+  status,
+  isDatabase,
+  onOpenDatabase,
+  onExport,
+  favorite,
+  onToggleFavorite,
+  onHistory,
+}: Props) {
+  const iconButton =
+    "grid size-7 shrink-0 place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-100";
   const parts = path.split("/");
   const name = parts.pop()!.replace(/\.md$/i, "");
 
@@ -49,6 +64,19 @@ export function NoteTopBar({ path, icon, status, isDatabase, onOpenDatabase, onE
       <span aria-live="polite" className="shrink-0 text-xs text-neutral-400">
         {status}
       </span>
+      <button type="button" onClick={onHistory} className={iconButton} title="Historial de versiones" aria-label="Historial de versiones">
+        <History className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onToggleFavorite}
+        className={iconButton}
+        title={favorite ? "Quitar de favoritas" : "Añadir a favoritas"}
+        aria-label={favorite ? "Quitar de favoritas" : "Añadir a favoritas"}
+        aria-pressed={favorite}
+      >
+        <Star className={`size-4 ${favorite ? "fill-amber-400 text-amber-400" : ""}`} />
+      </button>
       <button
         type="button"
         onClick={onExport}

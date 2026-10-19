@@ -1,6 +1,37 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type Kind = "text" | "number" | "checkbox" | "date" | "select" | "tags";
+export type Kind =
+  | "text"
+  | "number"
+  | "checkbox"
+  | "date"
+  | "select"
+  | "tags"
+  | "url"
+  | "email"
+  | "phone"
+  | "files"
+  | "relation"
+  | "rollup"
+  | "formula"
+  | "created"
+  | "edited";
+
+/** Tipos que se calculan y no se guardan en las notas. */
+export const COMPUTED_KINDS: ReadonlySet<Kind> = new Set([
+  "rollup",
+  "formula",
+  "created",
+  "edited",
+]);
+
+export interface Rollup {
+  /** Columna de relación de esta base de datos. */
+  relation: string;
+  /** Propiedad de la base de datos relacionada. */
+  property: string;
+  function: string;
+}
 
 export type PropValue = string | number | boolean | string[] | null;
 export type Props = Record<string, PropValue>;
@@ -8,6 +39,11 @@ export type Props = Record<string, PropValue>;
 export interface Column {
   name: string;
   kind: Kind;
+  /** Expresión de una columna de fórmula. */
+  formula?: string;
+  /** Carpeta de la base de datos a la que apunta una relación. */
+  relation?: string;
+  rollup?: Rollup;
 }
 
 export interface Sort {
@@ -22,19 +58,52 @@ export interface Row {
   subfolder: string;
   props: Props;
   error: string | null;
+  /** Creación y última modificación del fichero (milisegundos). */
+  created: number | null;
+  modified: number | null;
 }
 
-export type View = "table" | "board" | "calendar";
+export type View = "table" | "board" | "calendar" | "gallery" | "list" | "timeline";
+
+export const VIEW_LABELS: Record<View, string> = {
+  table: "Tabla",
+  board: "Kanban",
+  calendar: "Calendario",
+  gallery: "Galería",
+  list: "Lista",
+  timeline: "Cronograma",
+};
+
+/** Condición de un filtro: «estado es Hecho». */
+export interface Filter {
+  column: string;
+  op: string;
+  value: PropValue;
+}
+
+/** Una vista guardada de la base de datos. */
+export interface ViewConfig {
+  id: string;
+  name: string;
+  kind: View;
+  filters: Filter[];
+  sort: Sort | null;
+  /** Agrupar (kanban, tabla, lista, galería). */
+  group_by: string | null;
+  /** Fecha del calendario o inicio en el cronograma. */
+  date_by: string | null;
+  /** Fecha de fin en el cronograma. */
+  end_by: string | null;
+  hidden: string[];
+  widths: Record<string, number>;
+  totals: Record<string, string>;
+}
 
 /** Lo que se guarda en `.botion-db.json`. */
 export interface Config {
   columns: Column[];
-  sort: Sort | null;
-  view: View;
-  /** Columna de selección que agrupa el kanban. */
-  group_by: string | null;
-  /** Columna de fecha que usa el calendario. */
-  date_by: string | null;
+  views: ViewConfig[];
+  active_view: string | null;
   /** Incluir las notas de las subcarpetas. */
   subfolders: boolean;
 }
@@ -52,7 +121,48 @@ export const KIND_LABELS: Record<Kind, string> = {
   date: "Fecha",
   select: "Selección",
   tags: "Etiquetas",
+  url: "URL",
+  email: "Email",
+  phone: "Teléfono",
+  files: "Archivos",
+  relation: "Relación",
+  rollup: "Rollup",
+  formula: "Fórmula",
+  created: "Fecha de creación",
+  edited: "Última edición",
 };
+
+/** Vista nueva con los valores por defecto. */
+export function newView(kind: View, name = VIEW_LABELS[kind]): ViewConfig {
+  return {
+    id: `vista-${Date.now().toString(36)}`,
+    name,
+    kind,
+    filters: [],
+    sort: null,
+    group_by: null,
+    date_by: null,
+    end_by: null,
+    hidden: [],
+    widths: {},
+    totals: {},
+  };
+}
+
+/** Vista abierta (la primera si la guardada no existe). */
+export function activeView(db: Config): ViewConfig {
+  return db.views.find((v) => v.id === db.active_view) ?? db.views[0] ?? newView("table");
+}
+
+/** Lo que se guarda de una base de datos cargada. */
+export function configOf(db: Config): Config {
+  return {
+    columns: db.columns,
+    views: db.views,
+    active_view: db.active_view,
+    subfolders: db.subfolders,
+  };
+}
 
 export function getDatabase(path: string): Promise<Database> {
   return invoke<Database>("get_database", { path });
@@ -111,10 +221,11 @@ export function columnOptions(db: Database): Record<string, string[]> {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Tipo más probable de un valor (igual que en Rust). */
-export function inferKind(value: PropValue): Kind {
+export function inferKind(value: PropValue | undefined): Kind {
   if (typeof value === "boolean") return "checkbox";
   if (typeof value === "number") return "number";
-  if (Array.isArray(value)) return "tags";
+  if (Array.isArray(value))
+    return value.length > 0 && value.every((v) => /^\s*\[\[.*\]\]\s*$/.test(String(v))) ? "relation" : "tags";
   if (typeof value === "string" && DATE.test(value)) return "date";
   return "text";
 }

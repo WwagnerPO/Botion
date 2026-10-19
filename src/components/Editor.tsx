@@ -8,6 +8,15 @@ import { callout } from "../lib/callout";
 import { embed, embedSchema } from "../lib/embed";
 import { Embed, type EmbedHost } from "./Embed";
 import { EmojiPicker } from "./EmojiPicker";
+import { Popover, PopoverItem } from "./Popover";
+import {
+  BLOCK_KINDS,
+  convertBlock,
+  deleteBlock,
+  duplicateBlock,
+  mentionPlugin,
+  type Mention,
+} from "../lib/blocks";
 import { $view } from "@milkdown/kit/utils";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
 import { imageSchema } from "@milkdown/kit/preset/commonmark";
@@ -26,7 +35,7 @@ import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { useEffect, useRef, useState } from "react";
 import { findCounts, findPlugin, moveFind, setFindQuery } from "../lib/find";
 
-interface Props {
+export interface EditorProps {
   initialValue: string;
   onChange: (markdown: string) => void;
   /** Se llama al hacer clic en un enlace `[[nota]]`. */
@@ -62,6 +71,8 @@ interface Props {
   onAddCover: () => void;
   /** Pide una dirección web (comando «/YouTube»). */
   onRequestUrl: (title: string, insert: (url: string) => void) => void;
+  /** Al escribir «@»: pide una nota o fecha para mencionar. */
+  onRequestMention: (insert: (mention: Mention) => void) => void;
 }
 
 /**
@@ -90,14 +101,16 @@ export function Editor({
   onSetPageIcon,
   onAddCover,
   onRequestUrl,
-}: Props) {
+  onRequestMention,
+}: EditorProps) {
+  const [blockMenu, setBlockMenu] = useState<{ anchor: HTMLElement; pos: number } | null>(null);
   const [emojiPicker, setEmojiPicker] = useState<{
     x: number;
     y: number;
     pick: (emoji: string) => void;
   } | null>(null);
-  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl });
-  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl };
+  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl, onRequestMention });
+  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl, onRequestMention };
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -201,6 +214,7 @@ export function Editor({
             setPageIcon: (emoji) => pageRef.current.onSetPageIcon(emoji),
             addCover: () => pageRef.current.onAddCover(),
             requestUrl: (title, insert) => pageRef.current.onRequestUrl(title, insert),
+            requestMention: (insert) => pageRef.current.onRequestMention(insert),
             pickAttachment: async (accept) => {
               const file = await pickFile(accept);
               if (!file) return null;
@@ -311,7 +325,22 @@ export function Editor({
       };
     });
 
-    crepe.editor.use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    // «@nota» o «@fecha»: sustituye la arroba por el enlace o la fecha.
+    const mentions = mentionPlugin((pos, view) =>
+      pageRef.current.onRequestMention((m) => {
+        if (view.state.doc.textBetween(pos, pos + 1) !== "@") return;
+        const { schema } = view.state;
+        const node =
+          m.kind === "note"
+            ? schema.nodes.wikilink.create({ target: m.target, alias: null })
+            : schema.text(m.text);
+        const tr = view.state.tr.replaceWith(pos, pos + 1, node);
+        view.dispatch(tr.insertText(" ", pos + node.nodeSize));
+        view.focus();
+      }),
+    );
+
+    crepe.editor.use(mentions).use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
@@ -356,6 +385,18 @@ export function Editor({
   function handleClick(e: React.MouseEvent) {
     const target = e.target as HTMLElement;
 
+    // Clic en el asa ⋮⋮ de un bloque: menú «Convertir en…».
+    const handle = target.closest<HTMLElement>(".milkdown-block-handle .operation-item:last-child");
+    if (handle) {
+      withView((view) => {
+        const r = handle.getBoundingClientRect();
+        const left = view.dom.getBoundingClientRect().left + 64;
+        const hit = view.posAtCoords({ left, top: r.top + r.height / 2 });
+        if (hit) setBlockMenu({ anchor: handle, pos: hit.pos });
+      });
+      return;
+    }
+
     const link = target.closest<HTMLElement>("[data-wikilink]");
     const dest = link?.dataset.wikilink;
     if (!dest) return;
@@ -389,6 +430,29 @@ export function Editor({
         />
       )}
       <div ref={rootRef} className="botion-editor" onClick={handleClick} />
+      {blockMenu && (
+        <Popover anchor={blockMenu.anchor} onClose={() => setBlockMenu(null)} className="w-52 p-1">
+          <p className="px-2 pt-1 pb-1 text-xs text-neutral-400">Convertir en</p>
+          {BLOCK_KINDS.map((b) => (
+            <PopoverItem
+              key={b.kind}
+              onClick={() => {
+                setBlockMenu(null);
+                withView((view) => convertBlock(view, blockMenu.pos, b.kind));
+              }}
+            >
+              {b.label}
+            </PopoverItem>
+          ))}
+          <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
+          <PopoverItem onClick={() => (setBlockMenu(null), withView((view) => duplicateBlock(view, blockMenu.pos)))}>
+            Duplicar
+          </PopoverItem>
+          <PopoverItem danger onClick={() => (setBlockMenu(null), withView((view) => deleteBlock(view, blockMenu.pos)))}>
+            Eliminar
+          </PopoverItem>
+        </Popover>
+      )}
       {emojiPicker && (
         <EmojiPicker
           x={emojiPicker.x}

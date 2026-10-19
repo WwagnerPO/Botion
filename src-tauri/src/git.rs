@@ -184,6 +184,73 @@ fn identity_args(root: &Path) -> Vec<&'static str> {
     }
 }
 
+/// Una versión guardada de una nota.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Version {
+    pub hash: String,
+    /// Segundos desde 1970.
+    pub date: i64,
+    pub author: String,
+    pub message: String,
+    /// Ruta de la nota en esa versión (cambia si se renombró).
+    pub path: String,
+}
+
+/// Versiones de una nota, de la más nueva a la más antigua (sigue los
+/// cambios de nombre).
+pub fn history(root: &Path, path: &str) -> Result<Vec<Version>, String> {
+    if !is_repo(root) {
+        return Ok(Vec::new());
+    }
+    let out = git_ok(
+        root,
+        &[
+            "log",
+            "--follow",
+            "--relative",
+            "-n",
+            "200",
+            "--name-only",
+            "--format=%x1e%H%x1f%at%x1f%an%x1f%s",
+            "--",
+            path,
+        ],
+    )
+    .unwrap_or_default();
+    Ok(out
+        .split('\u{1e}')
+        .filter_map(|record| {
+            let mut lines = record.lines().filter(|l| !l.trim().is_empty());
+            let mut fields = lines.next()?.split('\u{1f}');
+            let hash = fields.next()?.to_string();
+            let date = fields.next()?.parse().ok()?;
+            let author = fields.next()?.to_string();
+            let message = fields.next().unwrap_or("").to_string();
+            let path = lines.next().unwrap_or(path).trim().to_string();
+            Some(Version {
+                hash,
+                date,
+                author,
+                message,
+                path,
+            })
+        })
+        .collect())
+}
+
+/// Contenido de una nota en una versión.
+pub fn file_at(root: &Path, hash: &str, path: &str) -> Result<String, String> {
+    if hash.is_empty() || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("Versión no válida".into());
+    }
+    vault::resolve(root, path)?;
+    let out = git(root, &["show", &format!("{hash}:./{path}")])?;
+    if !out.status.success() {
+        return Err("No se pudo leer esa versión de la nota".into());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// Guarda en Git todos los cambios de la bóveda. Devuelve si hubo commit.
 pub fn commit_all(root: &Path, message: &str) -> Result<bool, String> {
     ensure_gitignore(root)?;
@@ -354,6 +421,44 @@ pub fn git_resolve(
 }
 
 #[tauri::command(async)]
+pub fn git_history(
+    path: String,
+    state: tauri::State<'_, VaultState>,
+) -> Result<Vec<Version>, String> {
+    history(&vault::current_root(&state)?, &path)
+}
+
+#[tauri::command(async)]
+pub fn git_file_at(
+    hash: String,
+    path: String,
+    state: tauri::State<'_, VaultState>,
+) -> Result<String, String> {
+    file_at(&vault::current_root(&state)?, &hash, &path)
+}
+
+/// Guarda ahora una versión de toda la bóveda.
+#[tauri::command(async)]
+pub fn git_save_version(
+    message: String,
+    state: tauri::State<'_, VaultState>,
+) -> Result<bool, String> {
+    let root = vault::current_root(&state)?;
+    if !is_repo(&root) {
+        init(&root)?;
+    }
+    let message = message.trim();
+    commit_all(
+        &root,
+        if message.is_empty() {
+            "Versión guardada en Botion"
+        } else {
+            message
+        },
+    )
+}
+
+#[tauri::command(async)]
 pub fn git_sync(state: tauri::State<'_, VaultState>) -> Result<SyncResult, String> {
     let root = vault::current_root(&state)?;
     let result = sync(&root)?;
@@ -378,6 +483,41 @@ mod tests {
             out.status.success(),
             "git {args:?}: {}",
             String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    #[test]
+    fn historial_de_una_nota_aunque_se_renombre() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::write(root.join("Idea.md"), "uno\n").unwrap();
+        init(root).unwrap();
+        fs::write(root.join("Idea.md"), "dos\n").unwrap();
+        commit_all(root, "Segunda").unwrap();
+        run(root, &["mv", "Idea.md", "Plan.md"]);
+        commit_all(root, "Renombrada").unwrap();
+
+        let versions = history(root, "Plan.md").unwrap();
+        let msgs: Vec<_> = versions
+            .iter()
+            .map(|v| (v.message.as_str(), v.path.as_str()))
+            .collect();
+        assert_eq!(msgs[0], ("Renombrada", "Plan.md"));
+        assert_eq!(msgs[1], ("Segunda", "Idea.md"));
+        assert_eq!(versions.len(), 3);
+        assert_eq!(
+            file_at(root, &versions[1].hash, &versions[1].path).unwrap(),
+            "dos\n"
+        );
+        assert_eq!(
+            file_at(root, &versions[2].hash, &versions[2].path).unwrap(),
+            "uno\n"
+        );
+        assert!(file_at(root, "zzz", "Plan.md").is_err());
+        assert!(
+            history(tempfile::tempdir().unwrap().path(), "x.md")
+                .unwrap()
+                .is_empty()
         );
     }
 

@@ -13,8 +13,8 @@ import type { TreeNode } from "../lib/vault";
 interface Props {
   nodes: TreeNode[];
   selected: string | null;
-  onSelect: (path: string) => void;
-  onSelectDatabase: (path: string) => void;
+  onSelect: (path: string, e?: React.MouseEvent) => void;
+  onSelectDatabase: (path: string, e?: React.MouseEvent) => void;
   onContextMenu: (node: TreeNode, e: React.MouseEvent) => void;
   /** Se suelta `path` (nota o carpeta) sobre la carpeta `folder`. */
   onMove: (path: string, folder: string) => void;
@@ -101,7 +101,7 @@ export function FileTree({
             >
               <button
                 type="button"
-                onClick={() => onSelect(node.path)}
+                onClick={(e) => onSelect(node.path, e)}
                 title={node.path}
                 className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
               >
@@ -191,7 +191,7 @@ function Folder({
         {/* Base de datos: el nombre abre la tabla; carpeta normal: la despliega. */}
         <button
           type="button"
-          onClick={() => (node.database ? onSelectDatabase(node.path) : setOpen(!open))}
+          onClick={(e) => (node.database ? onSelectDatabase(node.path, e) : setOpen(!open))}
           className="ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
           title={node.database ? "Abrir como base de datos" : node.path}
         >

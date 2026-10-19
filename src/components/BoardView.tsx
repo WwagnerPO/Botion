@@ -1,23 +1,8 @@
 import { useRef, useState } from "react";
-import {
-  valueText,
-  type Column,
-  type Database,
-  type PropValue,
-  type Props,
-  type Row,
-} from "../lib/database";
-import { Pill, formatDate } from "./PropertyInput";
-
-interface Props_ {
-  db: Database;
-  rows: Row[];
-  options: Record<string, string[]>;
-  onOpenNote: (path: string) => void;
-  onChangeValue: (rowPath: string, column: string, value: PropValue) => void;
-  onNewRow: (preset: Props) => void;
-  onGroupBy: (column: string) => void;
-}
+import { valueText, type Column, type Row } from "../lib/database";
+import { cell } from "../lib/dbview";
+import { CellView, Pill } from "./PropertyInput";
+import type { ViewProps } from "./viewProps";
 
 const NONE = "\u0000sin-valor";
 
@@ -29,19 +14,22 @@ export function groupableColumns(columns: Column[]) {
 /** Vista kanban: una columna por cada valor de una propiedad de selección. */
 export function BoardView({
   db,
+  view,
   rows,
+  ctx,
+  columns,
   options,
-  onOpenNote,
+  onPeek,
+  onOpenLink,
   onChangeValue,
   onNewRow,
-  onGroupBy,
-}: Props_) {
+}: ViewProps) {
   const [dragOver, setDragOver] = useState<string | null>(null);
   // Columnas ya vistas, para que no desaparezcan al vaciarlas arrastrando.
   const seen = useRef(new Map<string, Set<string>>());
   const candidates = groupableColumns(db.columns);
   const column =
-    candidates.find((c) => c.name === db.group_by) ??
+    candidates.find((c) => c.name === view.group_by) ??
     candidates.find((c) => c.kind === "select") ??
     candidates[0];
 
@@ -59,7 +47,7 @@ export function BoardView({
   seen.current.set(column.name, known);
   const groups = [NONE, ...[...known].sort((a, b) => a.localeCompare(b, "es"))];
   const groupOf = (row: Row) => valueText(row.props[column.name]) || NONE;
-  const others = db.columns.filter((c) => c.name !== column.name).slice(0, 3);
+  const others = columns.filter((c) => c.name !== column.name).slice(0, 4);
 
   function drop(e: React.DragEvent, group: string) {
     e.preventDefault();
@@ -73,20 +61,6 @@ export function BoardView({
 
   return (
     <div>
-      <label className="mb-3 flex items-center gap-2 text-sm text-neutral-500">
-        Agrupar por
-        <select
-          value={column.name}
-          onChange={(e) => onGroupBy(e.target.value)}
-          className="rounded-md border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700 dark:bg-neutral-900"
-        >
-          {candidates.map((c) => (
-            <option key={c.name} value={c.name}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <div className="flex items-start gap-3 overflow-x-auto pb-4">
         {groups.map((group) => {
           const cards = rows.filter((r) => groupOf(r) === group);
@@ -127,29 +101,18 @@ export function BoardView({
                   >
                     <button
                       type="button"
-                      onClick={() => onOpenNote(row.path)}
+                      onClick={() => onPeek(row.path)}
                       className="flex w-full items-center gap-1.5 truncate text-left text-sm font-medium hover:underline"
                     >
                       {typeof row.props.icono === "string" && <span>{row.props.icono}</span>}
                       <span className="truncate">{row.name}</span>
                     </button>
                     {others.map((c) => {
-                      const v = row.props[c.name];
-                      if (valueText(v) === "") return null;
+                      const v = cell(row, c, ctx);
+                      if (!v.error && (valueText(v.value) === "" || v.value === false)) return null;
                       return (
-                        <div
-                          key={c.name}
-                          className="mt-1 flex flex-wrap gap-1 text-xs text-neutral-500"
-                        >
-                          {c.kind === "select" || c.kind === "tags"
-                            ? (Array.isArray(v) ? v : [String(v)]).map((t) => (
-                                <Pill key={t} text={t} />
-                              ))
-                            : c.kind === "checkbox"
-                              ? v === true && <span>✓ {c.name}</span>
-                              : c.kind === "date"
-                                ? formatDate(valueText(v))
-                                : valueText(v)}
+                        <div key={c.name} className="mt-1 -mx-1.5 text-xs text-neutral-500" title={c.name}>
+                          <CellView kind={c.kind} value={v.value} error={v.error} alignNumbers={false} onOpenLink={onOpenLink} notePath={row.path} />
                         </div>
                       );
                     })}

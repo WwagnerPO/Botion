@@ -18,7 +18,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - Enlaces entre notas `[[nota]]` y backlinks.
 - Búsqueda rápida en todas las notas (`Ctrl+K`), sin distinguir tildes.
 - Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
-- Vistas de tabla, kanban y calendario.
+- Vistas de tabla, kanban, calendario, galería, lista y cronograma, con filtros, fórmulas y relaciones.
 - Plantillas.
 - Tema claro, oscuro o el del sistema.
 - Sincronización opcional con Git.
@@ -32,7 +32,7 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Código, Tabla, Fórmula |
-| Botion | Página (crea una nota y la enlaza), Imagen, Vídeo, Audio, Archivo, YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
+| Botion | Página (crea una nota y la enlaza), Mención, Imagen, Vídeo, Audio, Archivo, YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
 
 Todo se guarda con sintaxis compatible con Obsidian:
 
@@ -58,8 +58,22 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | `Ctrl+F` | Buscar en la nota (`Enter` / `Mayús+Enter` para moverse) |
 | `Ctrl+N` | Nueva nota |
 | `Ctrl+Mayús+H` | Resaltar |
+| `@` | Mencionar una nota o una fecha |
+| `Ctrl+clic` | Abrir en pestaña nueva |
+| `Alt+clic` | Abrir a la derecha (dos notas lado a lado) |
+| `Ctrl+W` | Cerrar pestaña |
+| `Ctrl+Tab` / `Ctrl+Mayús+Tab` | Pestaña siguiente / anterior |
 
 En macOS, `Cmd` en lugar de `Ctrl`.
+
+### Navegación
+
+- **Pestañas:** `Ctrl+clic` en una nota (o clic derecho → «Abrir en pestaña nueva»). El clic normal cambia la pestaña activa.
+- **Dos notas lado a lado:** `Alt+clic` o clic derecho → «Abrir a la derecha». Cada una se guarda sola.
+- **Favoritas y recientes:** la estrella de arriba a la derecha de la nota la añade a «Favoritas»; las últimas abiertas salen en «Recientes».
+- **Grafo:** en la barra lateral. Cada nota es un punto y cada enlace una línea; «Solo alrededor de la nota abierta» muestra su entorno.
+- **Historial:** el reloj de arriba a la derecha. Muestra las versiones guardadas con Git (al sincronizar o con «Guardar versión ahora») y permite restaurar una.
+- **Convertir en…:** pulsa el asa ⋮⋮ a la izquierda de un bloque para convertirlo (texto, títulos, listas, cita, código), duplicarlo o eliminarlo. Arrástrala para moverlo.
 
 ### Icono y portada
 
@@ -83,19 +97,48 @@ Pasa el ratón sobre la cabecera de la nota y pulsa «Añadir icono» o «Añadi
 
 ### Bases de datos
 
-Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en base de datos», o `/Base de datos` desde una nota). Se abre como una tabla:
+Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en base de datos», o `/Base de datos` desde una nota):
 
-- Cada nota de la carpeta es una fila; sus propiedades son las columnas.
-- Tipos de columna: Texto, Número, Casilla, Fecha, Selección y Etiquetas.
-- Ordenar, filtrar, añadir, renombrar y eliminar propiedades desde la cabecera.
-- «Incluir subcarpetas» muestra también las notas de las carpetas de dentro.
-- Los datos están en el frontmatter de cada nota. La carpeta solo guarda la configuración de la vista en un fichero oculto `.botion-db.json`.
+- Cada nota de la carpeta es una fila; sus propiedades (frontmatter) son las columnas.
+- Los datos están en las notas. La carpeta solo guarda la configuración en un fichero oculto `.botion-db.json`.
+- Pulsa el nombre de una fila para abrirla en un **panel lateral** (propiedades editables y texto de la nota) o «Abrir» para ir a la página.
 
-Cada base de datos tiene tres vistas, y recuerda la última que usaste:
+#### Vistas
 
-- **Tabla:** edición directa de cada celda.
-- **Kanban:** una columna por cada valor de una propiedad de selección; arrastra las tarjetas para cambiar el valor.
-- **Calendario:** las notas en el día de una propiedad de fecha; arrastra para cambiar la fecha o pulsa `+` en un día para crear una nota con esa fecha.
+Cada base de datos puede tener varias vistas guardadas (pestañas encima de la tabla), cada una con sus filtros, orden, grupos y columnas visibles. Pulsa la pestaña activa para renombrarla, cambiar su tipo, duplicarla o eliminarla.
+
+| Vista | Qué muestra |
+|-------|-------------|
+| Tabla | Edición directa de cada celda, grupos plegables y totales al pie |
+| Kanban | Una columna por valor de una propiedad; arrastra para cambiarlo |
+| Calendario | Las notas en el día de una fecha; arrastra para moverlas |
+| Galería | Tarjetas con la portada o el icono de cada nota |
+| Lista | Una línea por nota con sus propiedades a la derecha |
+| Cronograma | Barras entre una fecha de inicio y otra de fin; arrastra la barra o su borde |
+
+En la barra de la vista:
+
+- **Filtro:** condiciones por propiedad («estado es Hecho», «precio > 10», «fecha en la próxima semana»…). Se cumplen todas a la vez.
+- **Ordenar** y **Agrupar** por cualquier propiedad.
+- **Propiedades:** mostrar u ocultar columnas en esta vista, e «Incluir subcarpetas».
+- En la tabla, arrastra el borde de una cabecera para cambiar el ancho y la cabecera entera para reordenar. Pulsa el pie de una columna para elegir un total (contar, suma, media, mediana, mínimo, máximo, % marcadas…).
+
+#### Tipos de propiedad
+
+Texto, Número, Casilla, Fecha, Selección, Etiquetas, URL, Email, Teléfono, Archivos (adjuntos en `adjuntos/`), Relación, Rollup, Fórmula, Fecha de creación y Última edición. Pulsa la cabecera de una columna para cambiar su nombre o su tipo.
+
+- **Relación:** enlaza filas de otra base de datos. Se guarda como en Obsidian: `proyectos: ["[[Web]]", "[[App]]"]`.
+- **Rollup:** resume una propiedad de las filas relacionadas (contar, suma, media, mínimo, máximo, fechas…).
+- **Fórmula:** se calcula para cada fila y no se guarda en las notas. Ejemplos:
+
+  ```text
+  prop("precio") * prop("cantidad")
+  if(prop("hecha"), "✅", "⏳")
+  dateBetween(prop("fin"), today(), "days")
+  concat(upper(prop("estado")), " · ", formatDate(prop("fecha")))
+  ```
+
+  Funciones: `if`, `and`, `or`, `not`, `empty`, `length`, `concat`, `join`, `contains`, `lower`, `upper`, `trim`, `replace`, `replaceAll`, `substring`, `format`, `toNumber`, `round`, `floor`, `ceil`, `abs`, `sqrt`, `pow`, `min`, `max`, `sum`, `average`, `now`, `today`, `dateAdd`, `dateSubtract`, `dateBetween`, `formatDate`, `year`, `month`, `day`, `weekday`. Operadores: `+ - * / %`, `== != < <= > >=`, `and`/`&&`, `or`/`||`, `not`/`!`.
 
 Las notas muestran sus propiedades encima del texto y se pueden editar ahí también. Al editarlas se conservan los comentarios y el formato del resto del frontmatter.
 
@@ -171,23 +214,44 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 
 **Bases de datos**
 
-- [ ] Vistas de galería, lista y cronograma.
-- [ ] Varias vistas guardadas por base de datos, cada una con sus filtros.
-- [ ] Filtros por propiedad («estado es Hecho») y agrupar en la tabla.
-- [ ] Fórmulas, relaciones entre bases de datos y rollups.
-- [ ] Más tipos de propiedad: URL, email, teléfono, archivos, fecha de creación y de edición.
-- [ ] Abrir una fila en un panel lateral sin salir de la tabla.
-- [ ] Columnas: cambiar ancho, reordenar y ocultar.
-- [ ] Totales al pie (contar, sumar, media).
+- [x] Vistas de galería, lista y cronograma.
+- [x] Varias vistas guardadas por base de datos, cada una con sus filtros.
+- [x] Filtros por propiedad («estado es Hecho») y agrupar en la tabla.
+- [x] Fórmulas, relaciones entre bases de datos y rollups.
+- [x] Más tipos de propiedad: URL, email, teléfono, archivos, fecha de creación y de edición.
+- [x] Abrir una fila en un panel lateral sin salir de la tabla.
+- [x] Columnas: cambiar ancho, reordenar y ocultar.
+- [x] Totales al pie (contar, sumar, media).
 
 **Editor y navegación**
 
-- [ ] Menciones con `@` (nota o fecha).
-- [ ] Pestañas o dos notas lado a lado.
-- [ ] Grafo de enlaces entre notas.
-- [ ] Historial de una nota con Git: ver y restaurar versiones.
-- [ ] Notas favoritas y recientes en la barra lateral.
-- [ ] Arrastrar bloques para reordenarlos y «Convertir en…».
+- [x] Menciones con `@` (nota o fecha).
+- [x] Pestañas o dos notas lado a lado.
+- [x] Grafo de enlaces entre notas.
+- [x] Historial de una nota con Git: ver y restaurar versiones.
+- [x] Notas favoritas y recientes en la barra lateral.
+- [x] Arrastrar bloques para reordenarlos y «Convertir en…».
+
+**Ideas (lo que más se pide a Notion y aún no tiene)**
+
+- [ ] Modo sin distracciones: ancho completo, tipografía (serif/mono) y texto pequeño por nota.
+- [ ] Índice lateral de la nota (esquema de títulos siempre visible) y contador de palabras.
+- [ ] Notas diarias con un clic (`Diario/2026-10-19.md`) y plantilla propia.
+- [ ] Tareas con fecha de vencimiento y recordatorios (notificaciones del sistema).
+- [ ] Tareas recurrentes (cada semana, cada mes…) en las bases de datos.
+- [ ] Fechas en lenguaje natural («el viernes», «dentro de 3 días»).
+- [ ] Colores de texto y de fondo, y columnas dentro de una nota.
+- [ ] Notas al pie y comentarios en el margen.
+- [ ] Gráficos a partir de una base de datos (barras, líneas, tarta).
+- [ ] Formato condicional en tablas (colorear filas según un valor).
+- [ ] Plantillas por base de datos y botones que crean filas.
+- [ ] Bloques sincronizados (el mismo bloque en varias notas).
+- [ ] Ver PDFs dentro de la nota y subrayarlos.
+- [ ] Recortador web: guardar una página como nota.
+- [ ] Notas cifradas con contraseña.
+- [ ] Atajos de Vim opcionales.
+- [ ] Sincronización sin Git (carpeta en la nube, WebDAV, Syncthing) con avisos de conflicto.
+- [ ] App para el móvil que abra la misma bóveda.
 
 **Extras**
 

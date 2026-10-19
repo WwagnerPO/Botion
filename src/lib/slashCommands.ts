@@ -10,6 +10,7 @@ import {
   type CalloutType,
 } from "./callout";
 import { youtubeId } from "./attachments";
+import type { Mention } from "./blocks";
 import { embedSchema } from "./embed";
 import { highlightSchema } from "./highlight";
 import { wikiLinkSchema } from "./wikilink";
@@ -193,6 +194,8 @@ export interface SlashHandlers {
   setPageIcon: (emoji: string) => void;
   /** Añade una portada a la nota (propiedad `portada`). */
   addCover: () => void;
+  /** Pide una nota o fecha para mencionar (como al escribir «@»). */
+  requestMention: (insert: (mention: Mention) => void) => void;
   /** Pide una dirección web; al darla se llama a `insert`. */
   requestUrl: (title: string, insert: (url: string) => void) => void;
   /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
@@ -220,6 +223,16 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestLink((target) => insertWikiLink(ctx, target));
+      },
+    });
+    group.addItem("mention", {
+      label: "Mención",
+      icon: icon('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestMention((m) =>
+          m.kind === "note" ? insertWikiLink(ctx, m.target) : insertText(ctx, m.text),
+        );
       },
     });
     group.addItem("page", {
