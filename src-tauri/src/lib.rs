@@ -1,5 +1,6 @@
 mod database;
 mod files;
+mod git;
 mod index;
 mod links;
 mod props;
@@ -29,6 +30,9 @@ pub fn run() {
             database::get_properties,
             database::rename_database_property,
             database::delete_database_property,
+            git::git_status,
+            git::git_init,
+            git::git_sync,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");

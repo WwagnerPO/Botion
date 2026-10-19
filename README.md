@@ -2,7 +2,7 @@
 
 App de escritorio local para tomar notas, inspirada en [Notion](https://www.notion.so) y [Obsidian](https://obsidian.md). Tus notas son ficheros `.md` normales en una carpeta de tu ordenador, con funciones tipo Notion: editor visual, enlaces entre notas y bases de datos con varias vistas.
 
-> Estado: **en desarrollo inicial**.
+> Estado: **primera versión completa** (todas las fases de la hoja de ruta).
 
 ## Principios
 
@@ -57,6 +57,16 @@ Las plantillas son notas normales de la carpeta `Plantillas`. Úsalas con `/Plan
 
 Variables que se sustituyen al usarlas: `{{titulo}}`, `{{fecha}}` y `{{hora}}`.
 
+### Sincronización con Git
+
+Opcional. Al pie de la barra lateral:
+
+1. «Activar historial con Git» convierte la bóveda en un repositorio (si no lo era) y guarda una primera versión.
+2. Para sincronizar entre ordenadores, añade un remoto con Git (por ejemplo `git remote add origin git@github.com:tu-usuario/notas.git`).
+3. «Sincronizar» guarda los cambios, baja los del remoto y sube los tuyos. También puede hacerse solo cada 5 minutos.
+
+Usa el `git` instalado en tu sistema y sus credenciales (SSH o gestor de credenciales); Botion nunca pide contraseñas. Si dos ordenadores cambian la misma parte de una nota, avisa del conflicto sin perder nada: tus cambios quedan guardados en Git para resolverlo.
+
 ### Ejemplo de nota con propiedades
 
 ```markdown
@@ -92,7 +102,7 @@ Contenido normal en Markdown...
 6. [x] Índice SQLite y búsqueda rápida.
 7. [x] Bases de datos: frontmatter + vista de tabla.
 8. [x] Vistas kanban y calendario, plantillas.
-9. [ ] Sincronización opcional con Git.
+9. [x] Sincronización opcional con Git.
 
 ## Desarrollo local
 

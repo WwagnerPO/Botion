@@ -5,10 +5,12 @@ import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { DatabaseView } from "./components/DatabaseView";
 import { Dialog, type DialogRequest } from "./components/Dialog";
 import { Editor } from "./components/Editor";
+import { GitPanel } from "./components/GitPanel";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
+import type { SyncResult } from "./lib/git";
 import {
   columnOptions,
   createDatabase,
@@ -359,6 +361,21 @@ export default function App() {
     });
   }
 
+  const beforeSync = useCallback(() => autosaver.flush(), [autosaver]);
+
+  /** Tras sincronizar: recarga lo que haya cambiado al bajar del remoto. */
+  async function handleSynced(result: SyncResult, message: string) {
+    setError(null);
+    setNotice(message);
+    if (!result.pulled) return;
+    await reloadTree();
+    setDbReloadKey((k) => k + 1);
+    const current = noteRef.current;
+    if (current && result.changed.includes(current.path)) {
+      await openNote(current.path, true);
+    }
+  }
+
   /** Nueva fila (nota) en una base de datos, sin salir de la tabla. */
   function newRow(folder: string, preset: Props = {}) {
     setDialog({
@@ -613,6 +630,16 @@ export default function App() {
         onNewFolder={() => newFolder()}
         onSearch={() => setSearching(true)}
         onContextMenu={handleContextMenu}
+        footer={
+          vault && (
+            <GitPanel
+              root={vault.root}
+              beforeSync={beforeSync}
+              onSynced={handleSynced}
+              onError={showError}
+            />
+          )
+        }
       />
       <main className="flex min-w-0 flex-1 flex-col">
         {error && (

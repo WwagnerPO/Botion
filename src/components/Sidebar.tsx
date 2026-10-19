@@ -1,6 +1,7 @@
 import type { TreeNode, Vault } from "../lib/vault";
 import { FileTree } from "./FileTree";
 import { ThemeToggle } from "./ThemeToggle";
+import type { ReactNode } from "react";
 
 interface Props {
   vault: Vault | null;
@@ -11,6 +12,8 @@ interface Props {
   onNewNote: () => void;
   onNewFolder: () => void;
   onSearch: () => void;
+  /** Contenido extra al pie (estado de Git). */
+  footer?: ReactNode;
   /** `node` es `null` al hacer clic derecho en una zona vacía. */
   onContextMenu: (node: TreeNode | null, e: React.MouseEvent) => void;
 }
@@ -28,6 +31,7 @@ export function Sidebar({
   onNewFolder,
   onSearch,
   onContextMenu,
+  footer,
 }: Props) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
@@ -122,7 +126,8 @@ export function Sidebar({
           />
         )}
       </nav>
-      <footer className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+      <footer className="space-y-3 border-t border-neutral-200 p-3 dark:border-neutral-800">
+        {footer}
         <ThemeToggle />
       </footer>
     </aside>
