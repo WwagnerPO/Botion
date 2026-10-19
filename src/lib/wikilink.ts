@@ -1,5 +1,8 @@
 import { InputRule } from "@milkdown/kit/prose/inputrules";
-import { $inputRule, $nodeSchema, $remark } from "@milkdown/kit/utils";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
+import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
+import { $inputRule, $nodeSchema, $prose, $remark } from "@milkdown/kit/utils";
 
 /**
  * Enlaces `[[nota]]`, `[[nota|texto]]` y `[[nota#sección]]` en el editor.
@@ -128,3 +131,57 @@ export const wikiLink = [
   wikiLinkSchema,
   wikiLinkInputRule,
 ].flat();
+
+/** Clave para pedir que se vuelva a mirar qué enlaces existen. */
+export const wikiLinkStatusKey = new PluginKey<DecorationSet>("wikiLinkStatus");
+
+/**
+ * Marca con la clase `wikilink-missing` los enlaces a notas que aún no
+ * existen. `exists` se consulta cada vez, así que puede cambiar con el árbol.
+ */
+export function wikiLinkStatus(exists: () => (target: string) => boolean) {
+  const build = (doc: ProseNode) => {
+    const check = exists();
+    const decorations: Decoration[] = [];
+    doc.descendants((node, pos) => {
+      if (node.type.name === "wikilink" && !check(node.attrs.target)) {
+        decorations.push(
+          Decoration.node(pos, pos + node.nodeSize, { class: "wikilink-missing" }),
+        );
+      }
+    });
+    return DecorationSet.create(doc, decorations);
+  };
+
+  return $prose(
+    () =>
+      new Plugin<DecorationSet>({
+        key: wikiLinkStatusKey,
+        state: {
+          init: (_, state) => build(state.doc),
+          apply: (tr, old) =>
+            tr.docChanged || tr.getMeta(wikiLinkStatusKey)
+              ? build(tr.doc)
+              : old.map(tr.mapping, tr.doc),
+        },
+        props: {
+          decorations: (state) => wikiLinkStatusKey.getState(state),
+        },
+      }),
+  );
+}
+
+/**
+ * Comprueba si un enlace apunta a alguna nota, con las mismas reglas que
+ * Rust: por nombre en cualquier carpeta, o por ruta (completa o final).
+ */
+export function linkChecker(notePaths: string[]) {
+  const noExt = notePaths.map((p) => p.replace(/\.md$/i, "").toLowerCase());
+  const stems = new Set(noExt.map((p) => p.split("/").pop()!));
+  return (target: string) => {
+    const t = target.split("#")[0].trim().replace(/\.md$/i, "").toLowerCase();
+    if (!t) return true;
+    if (!t.includes("/")) return stems.has(t);
+    return noExt.some((p) => p === t || p.endsWith("/" + t));
+  };
+}

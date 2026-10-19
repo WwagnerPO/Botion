@@ -91,6 +91,11 @@ export function refreshTree(): Promise<TreeNode[]> {
   return invoke<TreeNode[]>("refresh_tree");
 }
 
+/** Avisa de las notas cuyo fichero ha cambiado (rutas relativas). */
+export function onNotesChanged(handler: (paths: string[]) => void) {
+  return listen<string[]>("notes-changed", (e) => handler(e.payload));
+}
+
 /** Avisa cuando cambian las notas desde fuera de la app. */
 export function onVaultChanged(handler: (tree: TreeNode[]) => void) {
   return listen<TreeNode[]>("vault-changed", (e) => handler(e.payload));

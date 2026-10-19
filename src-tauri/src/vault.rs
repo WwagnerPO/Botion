@@ -161,13 +161,16 @@ fn watch(
         move |result: DebounceEventResult| {
             let Ok(events) = result else { return };
             // Ignora ficheros ocultos: .git, temporales de guardado...
-            let relevant = events.iter().any(|e| {
-                e.path.strip_prefix(&root).is_ok_and(|rel| {
+            let changed: Vec<PathBuf> = events
+                .iter()
+                .filter_map(|e| e.path.strip_prefix(&root).ok())
+                .filter(|rel| {
                     !rel.components()
                         .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
                 })
-            });
-            if !relevant {
+                .map(Path::to_path_buf)
+                .collect();
+            if changed.is_empty() {
                 return;
             }
             if let Ok(mut guard) = index.lock()
@@ -180,6 +183,16 @@ fn watch(
             {
                 let _ = app.emit("vault-changed", &tree);
                 last = tree;
+            }
+            // Notas cuyo contenido puede haber cambiado (también por la propia
+            // app: la interfaz compara con lo último que guardó).
+            let notes: Vec<String> = changed
+                .iter()
+                .filter(|rel| is_markdown(rel))
+                .map(|rel| relative(Path::new(""), rel))
+                .collect();
+            if !notes.is_empty() {
+                let _ = app.emit("notes-changed", &notes);
             }
         },
     )

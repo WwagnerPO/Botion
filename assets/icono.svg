@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#5b21b6"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#fondo)"/>
+  <!-- Página con la esquina doblada -->
+  <path d="M300 220h300l150 150v434a40 40 0 0 1-40 40H300a40 40 0 0 1-40-40V260a40 40 0 0 1 40-40z" fill="#ffffff"/>
+  <path d="M600 220v110a40 40 0 0 0 40 40h110z" fill="#ddd6fe"/>
+  <!-- Letra B -->
+  <path d="M390 420h130c62 0 100 30 100 80 0 32-17 56-46 67 38 10 60 38 60 76 0 56-42 91-110 91H390zm70 60v80h52c30 0 46-14 46-40s-16-40-46-40zm0 136v88h62c32 0 50-16 50-44s-18-44-50-44z" fill="#5b21b6"/>
+</svg>
