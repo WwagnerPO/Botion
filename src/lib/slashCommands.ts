@@ -160,6 +160,8 @@ export interface SlashHandlers {
   requestPage: (insert: (target: string) => void) => void;
   /** Pide elegir una base de datos; al elegirla se llama con su carpeta. */
   requestDatabase: (insert: (folder: string) => void) => void;
+  /** Exportar la nota abierta. */
+  exportNote: (format: "html" | "pdf") => void;
   /** Elige una imagen y la guarda como adjunto; devuelve su enlace. */
   pickImage: () => Promise<string | null>;
   /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
@@ -306,6 +308,22 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         insert("```mermaid\nflowchart LR\n  Idea --> Nota --> Proyecto\n```")(ctx);
+      },
+    });
+    group.addItem("export-pdf", {
+      label: "Exportar a PDF",
+      icon: icon('<path d="M6 3h9l4 4v14H6z"/><path d="M12 10v7M9 14l3 3 3-3"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.exportNote("pdf");
+      },
+    });
+    group.addItem("export-html", {
+      label: "Exportar a HTML",
+      icon: icon('<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.exportNote("html");
       },
     });
     group.addItem("today", {

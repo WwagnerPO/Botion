@@ -40,6 +40,8 @@ interface Props {
   onRequestDatabase: (insert: (folder: string) => void) => void;
   /** Lo que necesitan las incrustaciones `![[...]]`. */
   embedHost: EmbedHost;
+  /** Comandos «/Exportar a PDF» y «/Exportar a HTML». */
+  onExport: (format: "html" | "pdf") => void;
   /** Para guardar y mostrar imágenes adjuntas. */
   vaultRoot: string;
   notePath: string;
@@ -78,6 +80,7 @@ export function Editor({
   vaultRoot,
   notePath,
   onError,
+  onExport,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -105,6 +108,8 @@ export function Editor({
   embedHostRef.current = embedHost;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onExportRef = useRef(onExport);
+  onExportRef.current = onExport;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -175,6 +180,7 @@ export function Editor({
             requestPage: (insert) => onRequestPageRef.current(insert),
             notify: (message) => onNotifyRef.current(message),
             requestDatabase: (insert) => onRequestDatabaseRef.current(insert),
+            exportNote: (format) => onExportRef.current(format),
             pickImage: async () => {
               const file = await pickFile("image/*");
               if (!file) return null;

@@ -12,3 +12,15 @@ body {
   @apply bg-white text-neutral-900 antialiased dark:bg-neutral-900 dark:text-neutral-100;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Imprimir o guardar como PDF: solo la nota. */
+@media print {
+  html, body, #root { height: auto; overflow: visible; background: white; color: black; }
+  aside, .no-print, [role="alert"], [role="status"],
+  .milkdown-block-handle, .milkdown-slash-menu, .milkdown-toolbar { display: none !important; }
+  main, main > div { overflow: visible !important; display: block !important; }
+  /* Diagramas: solo el dibujo, sin el código ni las herramientas. */
+  .milkdown-code-block:has(svg[id^="botion-mermaid"]) .codemirror-host,
+  .milkdown-code-block .tools,
+  .milkdown-code-block .preview-label { display: none !important; }
+}

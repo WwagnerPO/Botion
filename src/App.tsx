@@ -11,6 +11,8 @@ import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { linkChecker } from "./lib/wikilink";
+import { displayUrl } from "./lib/attachments";
+import { noteToHtml, printNote, saveHtml } from "./lib/export";
 import type { SyncResult } from "./lib/git";
 import {
   columnOptions,
@@ -466,6 +468,25 @@ export default function App() {
     return out;
   }
 
+  /** Exporta la nota abierta a HTML (un fichero) o a PDF (imprimir). */
+  async function exportNote(format: "html" | "pdf") {
+    const current = noteRef.current;
+    if (!current || !vault) return;
+    await autosaver.flush();
+    if (format === "pdf") {
+      await printNote();
+      return;
+    }
+    await run(async () => {
+      const name = current.path.split("/").pop()!.replace(/\.md$/, "");
+      const html = await noteToHtml(name, await readNote(current.path), props, (src) =>
+        displayUrl(src, vault.root, current.path),
+      );
+      const saved = await saveHtml(name, html);
+      if (saved) setNotice(`Exportada a ${saved}`);
+    });
+  }
+
   /** Comando «/Página»: crea una nota junto a la abierta y la enlaza. */
   function requestPage(insert: (target: string) => void) {
     const folder = noteRef.current?.path.split("/").slice(0, -1).join("/") ?? "";
@@ -799,8 +820,24 @@ export default function App() {
           >
             <div className="mx-auto w-full max-w-3xl pt-10">
               <div className="mb-6 flex items-center justify-between px-14 text-xs text-neutral-400">
-                <span className="truncate">{note.path}</span>
-                <span aria-live="polite">{STATUS_TEXT[status]}</span>
+                <span className="no-print truncate">{note.path}</span>
+                <span className="no-print flex shrink-0 items-center gap-3">
+                  <span aria-live="polite">{STATUS_TEXT[status]}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      showMenu(r.left - 120, r.bottom + 4, [
+                        { label: "Exportar a PDF", onSelect: () => exportNote("pdf") },
+                        { label: "Exportar a HTML", onSelect: () => exportNote("html") },
+                      ]);
+                    }}
+                    className="rounded px-1.5 py-0.5 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                    title="Exportar"
+                  >
+                    Exportar
+                  </button>
+                </span>
               </div>
               <PropertiesPanel
                 path={note.path}
@@ -832,6 +869,7 @@ export default function App() {
                 vaultRoot={vault?.root ?? ""}
                 notePath={note.path}
                 onError={showError}
+                onExport={exportNote}
               />
               <Backlinks
                 backlinks={backlinks}
