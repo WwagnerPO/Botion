@@ -1,4 +1,5 @@
 import { Crepe } from "@milkdown/crepe";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
@@ -293,18 +294,34 @@ export function Editor({
     // Imágenes: la ruta relativa de la nota se convierte en una que la app
     // puede mostrar, sin tocar lo que se guarda.
     const imageView = $view(imageSchema.node, () => (initial) => {
-      // ![](https://youtube.com/…): el vídeo se reproduce en la nota, como en Obsidian.
+      // ![](https://youtube.com/…): miniatura del vídeo; al pulsarla se abre en
+      // el navegador. YouTube no deja reproducir dentro de una app de
+      // escritorio (error 153: la página no viene de una web).
       const video = youtubeId(initial.attrs.src);
       if (video) {
-        const frame = document.createElement("iframe");
-        frame.className = "youtube-embed";
-        frame.src = `https://www.youtube-nocookie.com/embed/${video}`;
-        frame.title = initial.attrs.alt || "YouTube";
-        frame.allow = "encrypted-media; picture-in-picture; fullscreen";
-        frame.referrerPolicy = "strict-origin-when-cross-origin";
+        const card = document.createElement("span");
+        card.className = "youtube-card";
+        card.contentEditable = "false";
+        card.title = "Ver en YouTube";
+        card.setAttribute("role", "link");
+        const thumb = document.createElement("img");
+        thumb.src = `https://i.ytimg.com/vi/${video}/hqdefault.jpg`;
+        thumb.alt = initial.attrs.alt || "Vídeo de YouTube";
+        const play = document.createElement("span");
+        play.className = "youtube-play";
+        play.textContent = "▶";
+        const label = document.createElement("span");
+        label.className = "youtube-label";
+        label.textContent = "Ver en YouTube ↗";
+        card.append(thumb, play, label);
+        card.addEventListener("click", (e) => {
+          e.preventDefault();
+          openUrl(`https://www.youtube.com/watch?v=${video}`).catch(() => window.open(initial.attrs.src, "_blank"));
+        });
         return {
-          dom: frame,
+          dom: card,
           update: (node) => node.type.name === "image" && youtubeId(node.attrs.src) === video,
+          stopEvent: (e) => e.type === "click",
         };
       }
       const img = document.createElement("img");

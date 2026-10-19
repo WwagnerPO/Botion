@@ -46,7 +46,7 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | Diagrama | bloque de código `mermaid`, con vista previa |
 | Imagen | `![texto](adjuntos/foto.png)` |
 | Vídeo, audio o archivo | `![[adjuntos/clip.mp4]]` (se reproduce o se abre con su programa) |
-| YouTube | `![YouTube](https://youtu.be/…)` |
+| YouTube | `![YouTube](https://youtu.be/…)` (miniatura; se abre en el navegador) |
 | Icono y portada | `icono: 🚀` y `portada: violeta` en el frontmatter |
 
 ### Atajos
