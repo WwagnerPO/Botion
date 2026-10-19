@@ -12,6 +12,7 @@ mod vault;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             vault::open_vault,
@@ -38,6 +39,8 @@ pub fn run() {
             git::git_sync,
             git::git_resolve,
             attachments::save_attachment,
+            attachments::open_in_system,
+            attachments::reveal_in_system,
             export::export_html,
             export::print_page,
         ])

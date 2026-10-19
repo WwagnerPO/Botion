@@ -1,33 +1,86 @@
 /* Ajusta el tema de Milkdown a los colores y fuentes de Botion. */
 .botion-editor .milkdown {
   --crepe-color-background: transparent;
+  --crepe-color-on-background: #2c2b29;
+  --crepe-color-surface: #f8f7f5;
+  --crepe-color-surface-low: #f0efec;
+  --crepe-color-on-surface: #2c2b29;
+  --crepe-color-on-surface-variant: #5c5a55;
+  --crepe-color-outline: #a19e97;
+  --crepe-color-primary: #7c3aed;
+  --crepe-color-secondary: #ede9fe;
+  --crepe-color-on-secondary: #2c2b29;
+  --crepe-color-hover: #f0efec;
+  --crepe-color-selected: #e5e3df;
+  --crepe-color-inline-code: #c2410c;
+  --crepe-color-inline-area: #f0efec;
   --crepe-font-title: inherit;
   --crepe-font-default: inherit;
   --crepe-base-font-size: 16px;
+  --crepe-shadow-1: 0 0 0 1px rgb(15 15 15 / 0.05), 0 2px 4px rgb(15 15 15 / 0.08);
+  --crepe-shadow-2: 0 0 0 1px rgb(15 15 15 / 0.05), 0 3px 6px rgb(15 15 15 / 0.08), 0 9px 24px rgb(15 15 15 / 0.14);
 }
 
 .botion-editor .milkdown .ProseMirror {
   padding: 0 56px 30vh;
+  line-height: 1.65;
 }
+
+/* Títulos más compactos y con peso, como en Notion. */
+.botion-editor .milkdown .ProseMirror h1 { font-size: 2.1em; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin-top: 0.9em; }
+.botion-editor .milkdown .ProseMirror h2 { font-size: 1.55em; font-weight: 650; letter-spacing: -0.015em; line-height: 1.3; margin-top: 1.1em; }
+.botion-editor .milkdown .ProseMirror h3 { font-size: 1.25em; font-weight: 600; line-height: 1.35; margin-top: 1em; }
+.botion-editor .milkdown .ProseMirror h4,
+.botion-editor .milkdown .ProseMirror h5,
+.botion-editor .milkdown .ProseMirror h6 { font-weight: 600; }
+.botion-editor .milkdown .ProseMirror > h1:first-child { margin-top: 0.2em; }
+
+.botion-editor .milkdown .ProseMirror strong { font-weight: 650; }
+.botion-editor .milkdown .ProseMirror a { color: #6d28d9; text-underline-offset: 3px; }
+.dark .botion-editor .milkdown .ProseMirror a { color: #c4b5fd; }
+
+/* Citas: barra gruesa y sin sangría extra. */
+.botion-editor .milkdown .ProseMirror blockquote {
+  border-left: 3px solid currentColor;
+  padding-left: 1em;
+  margin-left: 0;
+}
+.botion-editor .milkdown .ProseMirror blockquote::before { display: none; }
+
+/* Código en línea y bloques de código sin números de línea. */
+.botion-editor .milkdown .ProseMirror :not(pre) > code {
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.87em;
+}
+.botion-editor .milkdown .milkdown-code-block {
+  border-radius: 8px;
+  padding: 6px 16px 14px;
+}
+.botion-editor .milkdown .milkdown-code-block .cm-gutters { display: none; }
+.botion-editor .milkdown .milkdown-code-block .cm-activeLine { background: transparent; }
+
+.botion-editor .milkdown .ProseMirror hr { border-color: #e5e3df; }
+.dark .botion-editor .milkdown .ProseMirror hr { border-color: #2c2b29; }
 
 .dark .botion-editor .milkdown {
   --crepe-color-background: transparent;
-  --crepe-color-on-background: #e6e6e6;
-  --crepe-color-surface: #121212;
-  --crepe-color-surface-low: #1c1c1c;
-  --crepe-color-on-surface: #d1d1d1;
-  --crepe-color-on-surface-variant: #a9a9a9;
-  --crepe-color-outline: #757575;
-  --crepe-color-primary: #b5b5b5;
-  --crepe-color-secondary: #4d4d4d;
-  --crepe-color-on-secondary: #d6d6d6;
-  --crepe-color-inverse: #e5e5e5;
-  --crepe-color-on-inverse: #2a2a2a;
-  --crepe-color-inline-code: #ff6666;
-  --crepe-color-error: #ff6666;
-  --crepe-color-hover: #2a2a2a;
-  --crepe-color-selected: #333333;
-  --crepe-color-inline-area: #2b2b2b;
+  --crepe-color-on-background: #e5e3df;
+  --crepe-color-surface: #1e1d1c;
+  --crepe-color-surface-low: #252422;
+  --crepe-color-on-surface: #d2d0ca;
+  --crepe-color-on-surface-variant: #a19e97;
+  --crepe-color-outline: #7a7771;
+  --crepe-color-primary: #a78bfa;
+  --crepe-color-secondary: #3b2f63;
+  --crepe-color-on-secondary: #e5e3df;
+  --crepe-color-inverse: #e5e3df;
+  --crepe-color-on-inverse: #2c2b29;
+  --crepe-color-inline-code: #fb923c;
+  --crepe-color-error: #f87171;
+  --crepe-color-hover: #2c2b29;
+  --crepe-color-selected: #3a3936;
+  --crepe-color-inline-area: #2c2b29;
   --crepe-shadow-1:
     0px 1px 2px 0px rgba(0, 0, 0, 0.5), 0px 1px 3px 1px rgba(0, 0, 0, 0.3);
   --crepe-shadow-2:
@@ -78,10 +131,10 @@ svg.botion-icon * {
 .botion-editor .callout {
   --callout: 59 130 246;
   margin: 0.75rem 0;
-  border-left: 3px solid rgb(var(--callout));
-  border-radius: 6px;
-  background: rgb(var(--callout) / 0.08);
-  padding: 0.5rem 0.9rem;
+  border: 1px solid rgb(var(--callout) / 0.18);
+  border-radius: 8px;
+  background: rgb(var(--callout) / 0.07);
+  padding: 0.7rem 1rem;
 }
 .botion-editor .callout[data-callout="tip"] { --callout: 22 163 74; }
 .botion-editor .callout[data-callout="warning"] { --callout: 217 119 6; }
@@ -91,17 +144,24 @@ svg.botion-icon * {
   font-weight: 600;
   color: rgb(var(--callout));
 }
-.botion-editor .callout-title::before { content: "ℹ️ Nota "; }
-.botion-editor .callout[data-callout="tip"] > .callout-title::before { content: "💡 Consejo "; }
-.botion-editor .callout[data-callout="warning"] > .callout-title::before { content: "⚠️ Aviso "; }
-.botion-editor .callout[data-callout="danger"] > .callout-title::before { content: "⛔ Peligro "; }
+/* Icono siempre; el nombre del tipo solo si el aviso no tiene título. */
+.botion-editor .callout-title::before { content: "ℹ️"; margin-right: 0.45em; }
+.botion-editor .callout[data-callout="tip"] > .callout-title::before { content: "💡"; }
+.botion-editor .callout[data-callout="warning"] > .callout-title::before { content: "⚠️"; }
+.botion-editor .callout[data-callout="danger"] > .callout-title::before { content: "⛔"; }
+/* Título vacío: el salto de línea que pone ProseMirror no debe separar icono y nombre. */
+.botion-editor .callout-title:is(:empty, :has(> br:only-child)) { display: flex; align-items: center; }
+.botion-editor .callout-title:is(:empty, :has(> br:only-child))::after { content: "Nota"; }
+.botion-editor .callout[data-callout="tip"] > .callout-title:is(:empty, :has(> br:only-child))::after { content: "Consejo"; }
+.botion-editor .callout[data-callout="warning"] > .callout-title:is(:empty, :has(> br:only-child))::after { content: "Aviso"; }
+.botion-editor .callout[data-callout="danger"] > .callout-title:is(:empty, :has(> br:only-child))::after { content: "Peligro"; }
 
 /* Desplegables: flecha en el título; «-» empieza cerrado, «+» abierto. */
 .botion-editor .callout[data-fold="-"] > .callout-title::before,
 .botion-editor .callout[data-fold="+"] > .callout-title::before {
-  content: "▸ ";
+  content: "▸";
   display: inline-block;
-  width: 1.4em;
+  width: 1em;
   cursor: pointer;
   transition: transform 0.15s;
 }
@@ -189,3 +249,87 @@ svg.botion-icon * {
 /* Buscar en la nota */
 .botion-editor .find-match { background: rgb(250 204 21 / 0.4); border-radius: 2px; }
 .botion-editor .find-current { background: rgb(249 115 22 / 0.55); }
+
+/* Menú «/» compacto, como el de Notion. */
+.botion-editor .milkdown .milkdown-slash-menu {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: var(--crepe-shadow-2);
+  animation: pop 120ms ease-out;
+}
+.dark .botion-editor .milkdown .milkdown-slash-menu { background: #252422; }
+.botion-editor .milkdown .milkdown-slash-menu .tab-group { padding: 6px 6px 0; }
+.botion-editor .milkdown .milkdown-slash-menu .tab-group ul { padding: 4px; gap: 2px; }
+.botion-editor .milkdown .milkdown-slash-menu .tab-group ul li {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--crepe-color-on-surface-variant);
+}
+.botion-editor .milkdown .milkdown-slash-menu .tab-group ul li.selected { color: var(--crepe-color-on-surface); }
+.botion-editor .milkdown .milkdown-slash-menu .menu-groups { padding: 0 6px 6px; max-height: 360px; }
+.botion-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group h6 {
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+}
+.botion-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group li {
+  min-width: 260px;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.botion-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group li svg {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  padding: 6px;
+  border: 1px solid var(--crepe-color-selected);
+  border-radius: 6px;
+  background: var(--crepe-color-background);
+}
+.dark .botion-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group li svg { background: #1e1d1c; }
+.botion-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group li > span {
+  font-size: 14px;
+  font-weight: 450;
+}
+.botion-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group + .menu-group::before { margin: 4px 8px; }
+
+/* Barra de formato y asas de bloque más discretas. */
+.botion-editor .milkdown .milkdown-toolbar { border-radius: 8px; box-shadow: var(--crepe-shadow-2); }
+.botion-editor .milkdown .milkdown-block-handle .operation-item { width: 24px; height: 24px; padding: 2px; }
+.botion-editor .milkdown .milkdown-block-handle .operation-item svg { width: 20px; height: 20px; }
+
+/* Vídeo, audio y ficheros incrustados ![[adjuntos/…]] */
+.botion-editor .embed-media { display: flex; flex-direction: column; gap: 0.25rem; }
+.botion-editor .embed-media video { width: 100%; max-height: 420px; border-radius: 8px; background: #000; }
+.botion-editor .embed-media audio { width: 100%; }
+.botion-editor .embed-file {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid rgb(0 0 0 / 0.1);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  color: #5c5a55;
+}
+.dark .botion-editor .embed-file { border-color: rgb(255 255 255 / 0.12); color: #a19e97; }
+.botion-editor .embed-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--crepe-color-on-background); font-weight: 500; }
+.botion-editor .embed-file button,
+.botion-editor .embed-header button { display: inline-flex; align-items: center; gap: 0.25rem; }
+.botion-editor .embed-file button { border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.85em; }
+.botion-editor .embed-file button:hover { background: rgb(0 0 0 / 0.06); }
+.dark .botion-editor .embed-file button:hover { background: rgb(255 255 255 / 0.08); }
+.botion-editor .embed-label { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+/* Vídeos de YouTube ![](https://youtube.com/…) */
+.botion-editor .youtube-embed {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 8px;
+  background: #000;
+}

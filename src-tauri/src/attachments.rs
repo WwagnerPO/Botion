@@ -100,6 +100,42 @@ pub fn save_attachment(
     save(&root, &header("x-note")?, &header("x-name")?, bytes)
 }
 
+/// Abre una nota o adjunto de la bóveda con el programa del sistema.
+#[tauri::command(async)]
+pub fn open_in_system(
+    path: String,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, VaultState>,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let file = vault::resolve(&vault::current_root(&state)?, &path)?;
+    if !file.exists() {
+        return Err(format!("No existe «{path}»"));
+    }
+    app.opener()
+        .open_path(file.to_string_lossy(), None::<&str>)
+        .map_err(|e| format!("No se pudo abrir: {e}"))
+}
+
+/// Muestra una nota, carpeta o adjunto en el explorador de archivos.
+#[tauri::command(async)]
+pub fn reveal_in_system(
+    path: String,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, VaultState>,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let root = vault::current_root(&state)?;
+    let target = if path.is_empty() {
+        root
+    } else {
+        vault::resolve(&root, &path)?
+    };
+    app.opener()
+        .reveal_item_in_dir(target)
+        .map_err(|e| format!("No se pudo mostrar: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

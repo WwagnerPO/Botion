@@ -1,3 +1,12 @@
+import {
+  ChevronRight,
+  FileText,
+  Folder as FolderIcon,
+  FolderOpen,
+  MoreHorizontal,
+  Plus,
+  Table2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TreeNode } from "../lib/vault";
 
@@ -9,6 +18,8 @@ interface Props {
   onContextMenu: (node: TreeNode, e: React.MouseEvent) => void;
   /** Se suelta `path` (nota o carpeta) sobre la carpeta `folder`. */
   onMove: (path: string, folder: string) => void;
+  /** Nueva nota dentro de una carpeta. */
+  onNewNote: (folder: string) => void;
   depth?: number;
 }
 
@@ -26,6 +37,36 @@ function dragProps(path: string) {
   };
 }
 
+const row = (active: boolean) =>
+  `group/row relative flex h-7 items-center rounded-md pr-1 ${
+    active
+      ? "bg-neutral-200/80 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-50"
+      : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70"
+  }`;
+
+const rowAction =
+  "grid size-5 place-items-center rounded text-neutral-400 opacity-0 group-hover/row:opacity-100 focus:opacity-100 hover:bg-neutral-300/60 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200";
+
+/** Botón «…» que abre el mismo menú que el clic derecho. */
+function MoreButton({ onOpen }: { onOpen: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(e);
+      }}
+      className={rowAction}
+      aria-label="Más acciones"
+      title="Más acciones"
+    >
+      <MoreHorizontal className="size-3.5" />
+    </button>
+  );
+}
+
+const indent = (depth: number) => ({ paddingLeft: 4 + depth * 14 });
+
 export function FileTree({
   nodes,
   selected,
@@ -33,6 +74,7 @@ export function FileTree({
   onSelectDatabase,
   onContextMenu,
   onMove,
+  onNewNote,
   depth = 0,
 }: Props) {
   return (
@@ -47,24 +89,34 @@ export function FileTree({
             onSelectDatabase={onSelectDatabase}
             onContextMenu={onContextMenu}
             onMove={onMove}
+            onNewNote={onNewNote}
             depth={depth}
           />
         ) : (
           <li key={node.path} {...dragProps(node.path)}>
-            <button
-              type="button"
-              onClick={() => onSelect(node.path)}
+            <div
+              className={row(selected === node.path)}
+              style={indent(depth)}
               onContextMenu={(e) => onContextMenu(node, e)}
-              title={node.path}
-              className={`flex w-full items-center gap-1.5 truncate rounded px-2 py-1 text-left hover:bg-neutral-200/70 dark:hover:bg-neutral-800 ${
-                selected === node.path
-                  ? "bg-neutral-200 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-                  : ""
-              }`}
-              style={{ paddingLeft: 8 + depth * 14 + 16 }}
             >
-              <span className="truncate">{node.name}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onSelect(node.path)}
+                title={node.path}
+                className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
+              >
+                <span className="w-4 shrink-0" />
+                {node.icon ? (
+                  <span className="grid size-4 shrink-0 place-items-center text-[15px] leading-none">
+                    {node.icon}
+                  </span>
+                ) : (
+                  <FileText className="size-4 shrink-0 text-neutral-400" strokeWidth={1.75} />
+                )}
+                <span className="truncate">{node.name}</span>
+              </button>
+              <MoreButton onOpen={(e) => onContextMenu(node, e)} />
+            </div>
           </li>
         ),
       )}
@@ -79,6 +131,7 @@ function Folder({
   onSelectDatabase,
   onContextMenu,
   onMove,
+  onNewNote,
   depth,
 }: Omit<Props, "nodes"> & {
   node: Extract<TreeNode, { kind: "folder" }>;
@@ -93,13 +146,7 @@ function Folder({
     if (containsSelected) setOpen(true);
   }, [containsSelected]);
 
-  const arrow = (
-    <span
-      className={`inline-block w-3 text-[10px] text-neutral-400 transition-transform ${open ? "rotate-90" : ""}`}
-    >
-      ▶
-    </span>
-  );
+  const Icon = node.database ? Table2 : open ? FolderOpen : FolderIcon;
 
   return (
     <li
@@ -122,54 +169,52 @@ function Folder({
         onMove(path, node.path);
         setOpen(true);
       }}
-      className={dropping ? "rounded bg-violet-100 dark:bg-violet-950" : ""}
+      className={dropping ? "rounded-md bg-violet-100 ring-1 ring-violet-300 dark:bg-violet-950 dark:ring-violet-800" : ""}
     >
-      {node.database ? (
-        // Base de datos: la flecha despliega las notas y el nombre abre la tabla.
-        <div
-          className={`flex items-center rounded hover:bg-neutral-200/70 dark:hover:bg-neutral-800 ${
-            selected === node.path
-              ? "bg-neutral-200 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-              : ""
-          }`}
-          style={{ paddingLeft: 8 + depth * 14 }}
-          onContextMenu={(e) => onContextMenu(node, e)}
-        >
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            aria-expanded={open}
-            aria-label={open ? "Plegar" : "Desplegar"}
-            className="py-1 pr-1"
-          >
-            {arrow}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectDatabase(node.path)}
-            className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left"
-            title="Abrir como tabla"
-          >
-            <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-neutral-400" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
-              <path d="M1.75 6.5h12.5M6 6.5v6.75" />
-            </svg>
-            <span className="truncate">{node.name}</span>
-          </button>
-        </div>
-      ) : (
+      <div
+        className={row(selected === node.path)}
+        style={indent(depth)}
+        onContextMenu={(e) => onContextMenu(node, e)}
+      >
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          onContextMenu={(e) => onContextMenu(node, e)}
           aria-expanded={open}
-          className="flex w-full items-center gap-1 truncate rounded px-2 py-1 text-left hover:bg-neutral-200/70 dark:hover:bg-neutral-800"
-          style={{ paddingLeft: 8 + depth * 14 }}
+          aria-label={open ? "Plegar" : "Desplegar"}
+          className="grid size-4 shrink-0 place-items-center rounded text-neutral-400 hover:bg-neutral-300/60 dark:hover:bg-neutral-700"
         >
-          {arrow}
+          <ChevronRight
+            className={`size-3 transition-transform ${open ? "rotate-90" : ""}`}
+            strokeWidth={2.5}
+          />
+        </button>
+        {/* Base de datos: el nombre abre la tabla; carpeta normal: la despliega. */}
+        <button
+          type="button"
+          onClick={() => (node.database ? onSelectDatabase(node.path) : setOpen(!open))}
+          className="ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
+          title={node.database ? "Abrir como base de datos" : node.path}
+        >
+          <Icon
+            className={`size-4 shrink-0 ${node.database ? "text-violet-500" : "text-neutral-400"}`}
+            strokeWidth={1.75}
+          />
           <span className="truncate">{node.name}</span>
         </button>
-      )}
+        <MoreButton onOpen={(e) => onContextMenu(node, e)} />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNewNote(node.path);
+          }}
+          className={rowAction}
+          aria-label={`Nueva nota en ${node.name}`}
+          title="Nueva nota aquí"
+        >
+          <Plus className="size-3.5" />
+        </button>
+      </div>
       {open && (
         <FileTree
           nodes={node.children}
@@ -178,6 +223,7 @@ function Folder({
           onSelectDatabase={onSelectDatabase}
           onContextMenu={onContextMenu}
           onMove={onMove}
+          onNewNote={onNewNote}
           depth={depth + 1}
         />
       )}

@@ -134,7 +134,7 @@ export function CalendarView({
           <select
             value={column.name}
             onChange={(e) => onDateBy(e.target.value)}
-            className="rounded border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700"
+            className="rounded-md border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700 dark:bg-neutral-900"
           >
             {candidates.map((c) => (
               <option key={c.name} value={c.name}>
@@ -145,7 +145,7 @@ export function CalendarView({
         </label>
       </div>
 
-      <div className="grid grid-cols-7 border-t border-l border-neutral-200 text-sm dark:border-neutral-800">
+      <div className="grid grid-cols-7 overflow-hidden rounded-xl border-t border-l border-neutral-200 text-sm dark:border-neutral-800">
         {WEEKDAYS.map((d) => (
           <div
             key={d}
@@ -179,7 +179,7 @@ export function CalendarView({
                 <span
                   className={`px-1 text-xs ${
                     day === todayIso
-                      ? "rounded-full bg-red-500 font-semibold text-white"
+                      ? "rounded-full bg-violet-600 font-semibold text-white"
                       : inMonth
                         ? "text-neutral-500"
                         : "text-neutral-300 dark:text-neutral-600"
@@ -209,8 +209,9 @@ export function CalendarView({
                     <button
                       type="button"
                       onClick={() => onOpenNote(row.path)}
-                      className="block w-full cursor-grab truncate rounded bg-violet-100 px-1.5 py-0.5 text-left text-xs text-violet-900 hover:bg-violet-200 dark:bg-violet-900/50 dark:text-violet-100"
+                      className="block w-full cursor-grab truncate rounded-md bg-white px-1.5 py-0.5 text-left text-xs shadow-[0_0_0_1px_rgb(15_15_15/0.08),0_1px_2px_rgb(15_15_15/0.06)] hover:bg-neutral-50 dark:bg-neutral-800 dark:shadow-[0_0_0_1px_rgb(255_255_255/0.08)] dark:hover:bg-neutral-700"
                     >
+                      {typeof row.props.icono === "string" && `${row.props.icono} `}
                       {row.name}
                     </button>
                   </li>

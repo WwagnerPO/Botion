@@ -1,6 +1,8 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { ExternalLink, FileText, Paperclip } from "lucide-react";
 import { useEffect, useState } from "react";
+import { attachmentPath, fileKind } from "../lib/attachments";
 import { splitFrontmatter } from "../lib/frontmatter";
 import { isDatabaseEmbed } from "../lib/embed";
 import { valueText, type Database } from "../lib/database";
@@ -13,6 +15,41 @@ export interface EmbedHost {
   readNote: (path: string) => Promise<string>;
   getDatabase: (path: string) => Promise<Database>;
   open: (path: string, kind: "note" | "database") => void;
+  /** URL para mostrar un adjunto de la bóveda (vídeo, audio). */
+  fileUrl: (path: string) => string;
+  /** Abre un adjunto con el programa del sistema. */
+  openFile: (path: string) => void;
+}
+
+/** Vídeo, audio u otro fichero de la bóveda incrustado con `![[…]]`. */
+function FileEmbed({ target, host }: { target: string; host: EmbedHost }) {
+  const kind = fileKind(target)!;
+  const path = attachmentPath(target);
+  const name = path.split("/").pop()!;
+  if (kind === "video") {
+    return (
+      <div className="embed-media">
+        <video controls preload="metadata" src={host.fileUrl(path)} />
+      </div>
+    );
+  }
+  if (kind === "audio") {
+    return (
+      <div className="embed-media">
+        <audio controls preload="metadata" src={host.fileUrl(path)} />
+        <span className="embed-muted">{name}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="embed-file" contentEditable={false}>
+      <Paperclip className="size-4 shrink-0" />
+      <span className="embed-file-name">{name}</span>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => host.openFile(path)}>
+        <ExternalLink className="size-3.5" /> Abrir
+      </button>
+    </div>
+  );
 }
 
 /** Markdown de una nota → HTML seguro, con los extras de Botion básicos. */
@@ -26,6 +63,11 @@ function toHtml(markdown: string) {
 }
 
 export function Embed({ target, host }: { target: string; host: EmbedHost }) {
+  if (fileKind(target)) return <FileEmbed target={target} host={host} />;
+  return <NoteEmbed target={target} host={host} />;
+}
+
+function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "missing" }
@@ -69,9 +111,12 @@ export function Embed({ target, host }: { target: string; host: EmbedHost }) {
 
   const header = (label: string, open: () => void) => (
     <div className="embed-header" contentEditable={false}>
-      <span>{label}</span>
+      <span className="embed-label">
+        <FileText className="size-3.5" />
+        {label}
+      </span>
       <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={open}>
-        Abrir ↗
+        Abrir <ExternalLink className="size-3" />
       </button>
     </div>
   );

@@ -2,6 +2,32 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Grises cálidos (tipo papel) en lugar de los neutros de Tailwind, y un
+ * violeta propio como color de acento. Todo el resto de la app los usa.
+ */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-neutral-50: #f8f7f5;
+  --color-neutral-100: #f0efec;
+  --color-neutral-200: #e5e3df;
+  --color-neutral-300: #d2d0ca;
+  --color-neutral-400: #a19e97;
+  --color-neutral-500: #7a7771;
+  --color-neutral-600: #5c5a55;
+  --color-neutral-700: #423f3b;
+  --color-neutral-800: #2c2b29;
+  --color-neutral-900: #1e1d1c;
+  --color-neutral-950: #161615;
+  --shadow-pop: 0 0 0 1px rgb(15 15 15 / 0.05), 0 3px 6px rgb(15 15 15 / 0.08), 0 9px 24px rgb(15 15 15 / 0.14);
+  --animate-pop: pop 120ms ease-out;
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
 html,
 body,
 #root {
@@ -9,8 +35,28 @@ body,
 }
 
 body {
-  @apply bg-white text-neutral-900 antialiased dark:bg-neutral-900 dark:text-neutral-100;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  @apply bg-white font-sans text-neutral-800 antialiased dark:bg-neutral-950 dark:text-neutral-200;
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: rgb(139 92 246 / 0.22);
+}
+
+/* Barras de desplazamiento finas, que no tapen el contenido. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(120 117 113 / 0.35) transparent;
+}
+
+/* Contorno de foco solo con teclado. */
+:focus-visible {
+  outline: 2px solid rgb(139 92 246 / 0.6);
+  outline-offset: 1px;
+}
+
+kbd {
+  @apply rounded border border-neutral-200 bg-white px-1 font-sans text-[10px] font-medium text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800;
 }
 
 /* Imprimir o guardar como PDF: solo la nota. */

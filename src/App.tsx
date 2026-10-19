@@ -1,4 +1,16 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  CircleAlert,
+  FolderOpen,
+  Info,
+  LayoutTemplate,
+  Search,
+  SquarePen,
+  Table2,
+  X,
+  Zap,
+} from "lucide-react";
+import logo from "./assets/logo.png";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Backlinks } from "./components/Backlinks";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
@@ -6,13 +18,22 @@ import { DatabaseView } from "./components/DatabaseView";
 import { Dialog, type DialogRequest } from "./components/Dialog";
 import { Editor } from "./components/Editor";
 import { GitPanel } from "./components/GitPanel";
+import { NoteTopBar } from "./components/NoteTopBar";
+import { PageHeader } from "./components/PageHeader";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { linkChecker } from "./lib/wikilink";
 import { applyTheme } from "./lib/theme";
-import { displayUrl } from "./lib/attachments";
+import {
+  displayUrl,
+  openInSystem,
+  pickFile,
+  revealInSystem,
+  saveAttachment,
+} from "./lib/attachments";
+import { COVERS, COVER_KEY, ICON_KEY } from "./lib/cover";
 import { noteToHtml, printNote, saveHtml } from "./lib/export";
 import type { SyncResult } from "./lib/git";
 import {
@@ -68,6 +89,16 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
   saved: "Guardado",
   error: "Error al guardar",
 };
+
+/** Carpeta del árbol con esa ruta. */
+function findFolder(nodes: TreeNode[], path: string): Extract<TreeNode, { kind: "folder" }> | null {
+  for (const n of nodes) {
+    if (n.kind !== "folder") continue;
+    if (n.path === path) return n;
+    if (path.startsWith(n.path + "/")) return findFolder(n.children, path);
+  }
+  return null;
+}
 
 /** `true` si `path` es `base` o está dentro de la carpeta `base`. */
 function isInside(path: string, base: string) {
@@ -303,7 +334,7 @@ export default function App() {
   }
 
   /** Cambia una propiedad de la nota abierta (`null` la quita). */
-  async function changeProperty(key: string, value: PropValue) {
+  async function changeProperty(key: string, value: PropValue, refreshTree = false) {
     const current = noteRef.current;
     if (!current) return;
     await run(async () => {
@@ -322,6 +353,8 @@ export default function App() {
           : n,
       );
       setProps(noteProps);
+      // El icono también se ve en el árbol.
+      if (refreshTree) await reloadTree();
     });
   }
 
@@ -445,6 +478,8 @@ export default function App() {
   const openNoteRef = useRef(openNote);
   openNoteRef.current = openNote;
   const openDatabaseRef = useRef(openDatabase);
+  const vaultRootRef = useRef("");
+  vaultRootRef.current = vault?.root ?? "";
   openDatabaseRef.current = openDatabase;
   const embedHost = useMemo(
     () => ({
@@ -454,6 +489,8 @@ export default function App() {
       getDatabase,
       open: (path: string, kind: "note" | "database") =>
         kind === "note" ? openNoteRef.current(path) : openDatabaseRef.current(path),
+      fileUrl: (path: string) => displayUrl(path, vaultRootRef.current, ""),
+      openFile: (path: string) => openInSystem(path).catch((e) => showError(String(e))),
     }),
     [],
   );
@@ -716,6 +753,10 @@ export default function App() {
                 ]
               : []),
             { label: "Renombrar", onSelect: () => rename(node) },
+            {
+              label: "Mostrar en el explorador",
+              onSelect: () => revealInSystem(node.path).catch((err) => showError(String(err))),
+            },
             { label: "Eliminar", onSelect: () => remove(node), danger: true },
           ];
     setMenu({ x: e.clientX, y: e.clientY, items });
@@ -789,6 +830,12 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const noteIcon = typeof props[ICON_KEY] === "string" ? (props[ICON_KEY] as string) : null;
+  const noteCover = typeof props[COVER_KEY] === "string" ? (props[COVER_KEY] as string) : null;
+  const visibleProps = Object.fromEntries(
+    Object.entries(props).filter(([k]) => k !== ICON_KEY && k !== COVER_KEY),
+  );
+
   return (
     <div className="flex h-full">
       <Sidebar
@@ -797,9 +844,10 @@ export default function App() {
         onSelect={(path) => openNote(path)}
         onSelectDatabase={openDatabase}
         onOpenVault={handleOpenVault}
-        onNewNote={() => newNote()}
+        onNewNote={(folder) => newNote(folder)}
         onNewFolder={() => newFolder()}
         onSearch={() => setSearching(true)}
+        onCommands={() => setCommandsOpen(true)}
         onContextMenu={handleContextMenu}
         onMove={moveTo}
         footer={
@@ -814,28 +862,42 @@ export default function App() {
         }
       />
       <main className="flex min-w-0 flex-1 flex-col">
-        {error && (
-          <div
-            role="alert"
-            className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-          >
-            {error}
-          </div>
-        )}
-        {notice && (
-          <div
-            role="status"
-            className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
-          >
-            {notice}
-            <button
-              type="button"
-              onClick={() => setNotice(null)}
-              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-100"
-              aria-label="Cerrar aviso"
-            >
-              ✕
-            </button>
+        {(error || notice) && (
+          <div className="pointer-events-none fixed right-4 bottom-4 z-40 flex max-w-sm flex-col gap-2">
+            {error && (
+              <div
+                role="alert"
+                className="pointer-events-auto flex animate-pop items-start gap-2 rounded-lg bg-white px-3 py-2.5 text-sm text-red-700 shadow-pop dark:bg-neutral-800 dark:text-red-300"
+              >
+                <CircleAlert className="mt-0.5 size-4 shrink-0" />
+                <span className="flex-1">{error}</span>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-100"
+                  aria-label="Cerrar error"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            )}
+            {notice && (
+              <div
+                role="status"
+                className="pointer-events-auto flex animate-pop items-start gap-2 rounded-lg bg-white px-3 py-2.5 text-sm text-neutral-700 shadow-pop dark:bg-neutral-800 dark:text-neutral-200"
+              >
+                <Info className="mt-0.5 size-4 shrink-0 text-violet-500" />
+                <span className="flex-1">{notice}</span>
+                <button
+                  type="button"
+                  onClick={() => setNotice(null)}
+                  className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-100"
+                  aria-label="Cerrar aviso"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
         {note ? (
@@ -846,30 +908,44 @@ export default function App() {
             onPasteCapture={markEdit}
             onDropCapture={markEdit}
           >
-            <div className="mx-auto w-full max-w-3xl pt-10">
-              <div className="mb-6 flex items-center justify-between px-14 text-xs text-neutral-400">
-                <span className="no-print truncate">{note.path}</span>
-                <span className="no-print flex shrink-0 items-center gap-3">
-                  <span aria-live="polite">{STATUS_TEXT[status]}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      const r = e.currentTarget.getBoundingClientRect();
-                      showMenu(r.left - 120, r.bottom + 4, [
-                        { label: "Exportar a PDF", onSelect: () => exportNote("pdf") },
-                        { label: "Exportar a HTML", onSelect: () => exportNote("html") },
-                      ]);
-                    }}
-                    className="rounded px-1.5 py-0.5 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                    title="Exportar"
-                  >
-                    Exportar
-                  </button>
-                </span>
-              </div>
+            <NoteTopBar
+              path={note.path}
+              icon={noteIcon}
+              status={STATUS_TEXT[status]}
+              isDatabase={(folder) => !!findFolder(vault?.tree ?? [], folder)?.database}
+              onOpenDatabase={openDatabase}
+              onExport={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                showMenu(r.right - 192, r.bottom + 4, [
+                  { label: "Exportar a PDF", onSelect: () => exportNote("pdf") },
+                  { label: "Exportar a HTML", onSelect: () => exportNote("html") },
+                ]);
+              }}
+            />
+            <div className={noteCover ? "" : "pt-10"}>
+              <PageHeader
+                icon={noteIcon}
+                cover={noteCover}
+                vaultRoot={vault?.root ?? ""}
+                notePath={note.path}
+                onIcon={(icon) => changeProperty(ICON_KEY, icon, true)}
+                onCover={(cover) => changeProperty(COVER_KEY, cover, true)}
+                onUploadCover={async () => {
+                  const file = await pickFile("image/*");
+                  if (!file) return null;
+                  try {
+                    return await saveAttachment(note.path, file);
+                  } catch (e) {
+                    showError(String(e));
+                    return null;
+                  }
+                }}
+              />
+            </div>
+            <div className="mx-auto w-full max-w-3xl pt-4">
               <PropertiesPanel
                 path={note.path}
-                props={props}
+                props={visibleProps}
                 kinds={propKinds}
                 options={propOptions}
                 onChange={changeProperty}
@@ -900,6 +976,23 @@ export default function App() {
                 onExport={exportNote}
                 findOpen={findOpen}
                 onCloseFind={() => setFindOpen(false)}
+                onSetPageIcon={(icon) => changeProperty(ICON_KEY, icon, true)}
+                onAddCover={() => {
+                  const names = Object.keys(COVERS);
+                  if (!noteCover) {
+                    changeProperty(COVER_KEY, names[Math.floor(Math.random() * names.length)], true);
+                  }
+                }}
+                onRequestUrl={(title, insert) =>
+                  setDialog({
+                    kind: "prompt",
+                    title,
+                    label: "Dirección (https://…)",
+                    initial: "",
+                    confirm: "Insertar",
+                    onConfirm: (url) => insert(url),
+                  })
+                }
               />
               <Backlinks
                 backlinks={backlinks}
@@ -920,20 +1013,42 @@ export default function App() {
           />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center">
-            <div>
-              <h1 className="text-2xl font-semibold">Bienvenido a Botion</h1>
+            <div className="max-w-md">
+              <img src={logo} alt="" className="mx-auto size-16 rounded-2xl shadow-lg" />
+              <h1 className="mt-5 text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50">
+                Bienvenido a Botion
+              </h1>
               <p className="mt-2 text-neutral-500">
                 {vault
                   ? "Elige una nota en la barra lateral o crea una nueva."
                   : "Abre una carpeta con notas Markdown para empezar."}
               </p>
-              <button
-                type="button"
-                onClick={vault ? () => newNote() : handleOpenVault}
-                className="mt-6 rounded-md bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
-              >
-                {vault ? "Nueva nota" : "Abrir carpeta"}
-              </button>
+              <div className="mt-6 flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={vault ? () => newNote() : handleOpenVault}
+                  className="flex items-center gap-1.5 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
+                >
+                  {vault ? <SquarePen className="size-4" /> : <FolderOpen className="size-4" />}
+                  {vault ? "Nueva nota" : "Abrir carpeta"}
+                </button>
+                {vault && (
+                  <button
+                    type="button"
+                    onClick={() => setSearching(true)}
+                    className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                  >
+                    <Search className="size-4" /> Buscar
+                  </button>
+                )}
+              </div>
+              {vault && (
+                <p className="mt-8 space-x-4 text-xs text-neutral-400">
+                  <span><kbd>Ctrl K</kbd> buscar</span>
+                  <span><kbd>Ctrl P</kbd> comandos</span>
+                  <span><kbd>/</kbd> bloques</span>
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -944,6 +1059,7 @@ export default function App() {
         <SearchPalette
           placeholder="Escribe un comando…"
           recentLabel="Comandos"
+          icon={Zap}
           allowCreate={false}
           source={async (query) => {
             const fold = (t: string) =>
@@ -962,6 +1078,7 @@ export default function App() {
         <SearchPalette
           placeholder="Elegir base de datos…"
           recentLabel="Bases de datos"
+          icon={Table2}
           allowCreate={false}
           source={async (query) =>
             listDatabases()
@@ -977,6 +1094,7 @@ export default function App() {
         <SearchPalette
           placeholder="Elegir plantilla…"
           recentLabel="Plantillas"
+          icon={LayoutTemplate}
           allowCreate={false}
           source={async (query) =>
             listTemplates(vault?.tree ?? [])
