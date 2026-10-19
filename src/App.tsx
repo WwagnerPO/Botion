@@ -21,6 +21,12 @@ import {
 } from "./lib/database";
 import { joinFrontmatter, splitFrontmatter } from "./lib/frontmatter";
 import {
+  EXAMPLE_TEMPLATE,
+  TEMPLATES_FOLDER,
+  applyVariables,
+  listTemplates,
+} from "./lib/templates";
+import {
   createFolder,
   createNote,
   deleteEntry,
@@ -34,6 +40,7 @@ import {
   renameEntry,
   resolveNoteLink,
   setLastVault,
+  writeNote,
   type Backlink,
   type TreeNode,
   type Vault,
@@ -99,6 +106,13 @@ export default function App() {
   const closeDialog = useCallback(() => setDialog(null), []);
   const closeSearch = useCallback(() => setSearching(false), []);
   const closeLinkPicker = useCallback(() => setLinkRequest(null), []);
+  /** Elección de plantilla pendiente: insertar en la nota o crear una nueva. */
+  const [templateRequest, setTemplateRequest] = useState<
+    | { mode: "insert"; insert: (markdown: string) => void }
+    | { mode: "new"; folder: string }
+    | null
+  >(null);
+  const closeTemplatePicker = useCallback(() => setTemplateRequest(null), []);
   const showError = useCallback((message: string) => setError(message), []);
   const showMenu = useCallback(
     (x: number, y: number, items: MenuItem[]) => setMenu({ x, y, items }),
@@ -280,8 +294,73 @@ export default function App() {
     });
   }
 
+  /**
+   * Abre el selector de plantillas. Si no hay ninguna, ofrece crear la
+   * carpeta de plantillas con una de ejemplo.
+   */
+  function chooseTemplate(
+    request: NonNullable<typeof templateRequest>,
+  ) {
+    if (listTemplates(vault?.tree ?? []).length > 0) {
+      setTemplateRequest(request);
+      return;
+    }
+    setDialog({
+      kind: "confirm",
+      title: "Aún no hay plantillas",
+      message: `Las plantillas son notas de la carpeta «${TEMPLATES_FOLDER}». ¿Crearla con una plantilla de ejemplo («${EXAMPLE_TEMPLATE.name}»)?`,
+      confirm: "Crear",
+      onConfirm: () =>
+        run(async () => {
+          const path = await createNote(`${TEMPLATES_FOLDER}/${EXAMPLE_TEMPLATE.name}`);
+          await writeNote(path, EXAMPLE_TEMPLATE.content);
+          await reloadTree();
+          setTemplateRequest(request);
+        }),
+    });
+  }
+
+  /** Inserta una plantilla en la nota abierta y añade sus propiedades. */
+  async function insertTemplate(templatePath: string, insert: (md: string) => void) {
+    const current = noteRef.current;
+    if (!current) return;
+    await run(async () => {
+      const title = current.path.split("/").pop()!.replace(/\.md$/, "");
+      const content = applyVariables(await readNote(templatePath), { title });
+      insert(splitFrontmatter(content).body);
+      // Solo las propiedades que la nota aún no tiene.
+      const templateProps = await getProperties(templatePath).catch(() => ({}));
+      for (const [key, value] of Object.entries(templateProps)) {
+        if (key in props) continue;
+        await changeProperty(
+          key,
+          typeof value === "string" ? applyVariables(value, { title }) : value,
+        );
+      }
+    });
+  }
+
+  /** Crea una nota nueva a partir de una plantilla. */
+  function newNoteFromTemplate(templatePath: string, folder: string) {
+    setDialog({
+      kind: "prompt",
+      title: "Nueva nota desde plantilla",
+      label: "Nombre",
+      initial: "Sin título",
+      confirm: "Crear",
+      onConfirm: (name) =>
+        run(async () => {
+          const template = await readNote(templatePath);
+          const path = await createNote(folder ? `${folder}/${name}` : name);
+          await writeNote(path, applyVariables(template, { title: name }));
+          await reloadTree();
+          await openNote(path);
+        }),
+    });
+  }
+
   /** Nueva fila (nota) en una base de datos, sin salir de la tabla. */
-  function newRow(folder: string) {
+  function newRow(folder: string, preset: Props = {}) {
     setDialog({
       kind: "prompt",
       title: "Nueva fila",
@@ -290,7 +369,11 @@ export default function App() {
       confirm: "Crear",
       onConfirm: (name) =>
         run(async () => {
-          await createNote(`${folder}/${name}`);
+          const path = await createNote(`${folder}/${name}`);
+          // Valores de la columna del kanban o del día del calendario.
+          for (const [key, value] of Object.entries(preset)) {
+            await setProperty(path, key, value);
+          }
           await reloadTree();
           setDbReloadKey((k) => k + 1);
         }),
@@ -432,6 +515,10 @@ export default function App() {
             { label: "Nueva nota", onSelect: () => newNote() },
             { label: "Nueva carpeta", onSelect: () => newFolder() },
             { label: "Nueva base de datos", onSelect: () => createDatabaseHere() },
+            {
+              label: "Nueva nota desde plantilla",
+              onSelect: () => chooseTemplate({ mode: "new", folder: "" }),
+            },
           ]
         : [
             ...(node.kind === "folder"
@@ -443,6 +530,11 @@ export default function App() {
                   {
                     label: "Nueva carpeta aquí",
                     onSelect: () => newFolder(node.path),
+                  },
+                  {
+                    label: "Nueva nota desde plantilla",
+                    onSelect: () =>
+                      chooseTemplate({ mode: "new", folder: node.path }),
                   },
                   node.database
                     ? {
@@ -573,6 +665,9 @@ export default function App() {
                 onCreateDatabase={() =>
                   createDatabaseHere(note.path.split("/").slice(0, -1).join("/"))
                 }
+                onRequestTemplate={(insert) =>
+                  chooseTemplate({ mode: "insert", insert })
+                }
               />
               <Backlinks
                 backlinks={backlinks}
@@ -613,6 +708,25 @@ export default function App() {
       </main>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {templateRequest && (
+        <SearchPalette
+          placeholder="Elegir plantilla…"
+          recentLabel="Plantillas"
+          allowCreate={false}
+          source={async (query) =>
+            listTemplates(vault?.tree ?? [])
+              .filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()))
+              .map((t) => ({ ...t, snippet: "" }))
+          }
+          onOpen={(path) =>
+            templateRequest.mode === "insert"
+              ? insertTemplate(path, templateRequest.insert)
+              : newNoteFromTemplate(path, templateRequest.folder)
+          }
+          onCreate={() => {}}
+          onClose={closeTemplatePicker}
+        />
+      )}
       {linkRequest && (
         <SearchPalette
           placeholder="Enlazar a una nota…"

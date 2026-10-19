@@ -1,6 +1,7 @@
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
 import { clearTextInCurrentBlockCommand } from "@milkdown/kit/preset/commonmark";
+import { insert } from "@milkdown/kit/utils";
 import { wikiLinkSchema } from "./wikilink";
 
 /**
@@ -20,6 +21,9 @@ const dateIcon = icon(
 const timeIcon = icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
 const propertyIcon = icon(
   '<path d="M4 6h6M4 12h6M4 18h6"/><path d="M14 6h6M14 12h6M14 18h6" stroke-dasharray="2 2"/>',
+);
+const templateIcon = icon(
+  '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h4"/>',
 );
 const databaseIcon = icon(
   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
@@ -62,6 +66,8 @@ export interface SlashHandlers {
   addProperty: () => void;
   /** Crea una base de datos junto a la nota. */
   createDatabase: () => void;
+  /** Pide elegir una plantilla; al elegirla se inserta su Markdown. */
+  requestTemplate: (insert: (markdown: string) => void) => void;
 }
 
 type MenuBuilder = {
@@ -101,6 +107,17 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.createDatabase();
+      },
+    });
+    group.addItem("template", {
+      label: "Plantilla",
+      icon: templateIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestTemplate((markdown) => {
+          insert(markdown)(ctx);
+          ctx.get(editorViewCtx).focus();
+        });
       },
     });
     group.addItem("today", {

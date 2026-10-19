@@ -7,6 +7,12 @@ interface Props {
   onClose: () => void;
   /** Texto del campo de búsqueda vacío. */
   placeholder?: string;
+  /** Otra fuente de resultados en lugar de la búsqueda de notas. */
+  source?: (query: string) => Promise<SearchHit[]>;
+  /** Ofrecer «Crear nota» si no existe. */
+  allowCreate?: boolean;
+  /** Título de la lista sin consulta. */
+  recentLabel?: string;
 }
 
 type Item = { kind: "hit"; hit: SearchHit } | { kind: "create"; name: string };
@@ -53,6 +59,9 @@ export function SearchPalette({
   onCreate,
   onClose,
   placeholder = "Buscar o crear una nota…",
+  source = searchNotes,
+  allowCreate = true,
+  recentLabel = "Recientes",
 }: Props) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -66,7 +75,7 @@ export function SearchPalette({
   useEffect(() => {
     let current = true;
     const timer = window.setTimeout(() => {
-      searchNotes(query)
+      source(query)
         .then((result) => {
           if (current) {
             setHits(result);
@@ -85,7 +94,7 @@ export function SearchPalette({
   const exists = hits.some((h) => h.name.toLowerCase() === name.toLowerCase());
   const items: Item[] = [
     ...hits.map((hit) => ({ kind: "hit" as const, hit })),
-    ...(name && !exists ? [{ kind: "create" as const, name }] : []),
+    ...(allowCreate && name && !exists ? [{ kind: "create" as const, name }] : []),
   ];
 
   useEffect(() => {
@@ -147,7 +156,7 @@ export function SearchPalette({
         >
           {!query && hits.length > 0 && (
             <li className="px-3 pt-2 pb-1 text-xs font-medium text-neutral-400">
-              Recientes
+              {recentLabel}
             </li>
           )}
           {items.map((item, i) => (

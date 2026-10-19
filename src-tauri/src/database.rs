@@ -37,11 +37,26 @@ pub struct Sort {
     pub desc: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum View {
+    #[default]
+    Table,
+    Board,
+    Calendar,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
     pub columns: Vec<Column>,
     pub sort: Option<Sort>,
+    /// Vista con la que se abre: tabla, kanban o calendario.
+    pub view: View,
+    /// Columna de selección que agrupa las tarjetas del kanban.
+    pub group_by: Option<String>,
+    /// Columna de fecha que coloca las notas en el calendario.
+    pub date_by: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -59,6 +74,9 @@ pub struct Database {
     pub name: String,
     pub columns: Vec<Column>,
     pub sort: Option<Sort>,
+    pub view: View,
+    pub group_by: Option<String>,
+    pub date_by: Option<String>,
     pub rows: Vec<Row>,
 }
 
@@ -169,6 +187,9 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
         name: folder.rsplit('/').next().unwrap_or(folder).to_string(),
         columns,
         sort: config.sort,
+        view: config.view,
+        group_by: config.group_by,
+        date_by: config.date_by,
         rows,
     })
 }
@@ -220,6 +241,11 @@ pub fn rename_property(root: &Path, folder: &str, old: &str, new: &str) -> Resul
     {
         sort.column = new.to_string();
     }
+    for col in [&mut config.group_by, &mut config.date_by] {
+        if col.as_deref() == Some(old) {
+            *col = Some(new.to_string());
+        }
+    }
     write_config(&dir, &config)
 }
 
@@ -236,6 +262,11 @@ pub fn delete_property(root: &Path, folder: &str, key: &str) -> Result<(), Strin
     config.columns.retain(|c| c.name != key);
     if config.sort.as_ref().is_some_and(|s| s.column == key) {
         config.sort = None;
+    }
+    for col in [&mut config.group_by, &mut config.date_by] {
+        if col.as_deref() == Some(key) {
+            *col = None;
+        }
     }
     write_config(&dir, &config)
 }
@@ -420,6 +451,31 @@ mod tests {
         let dir = vault();
         assert!(rename_property(dir.path(), "Tareas", "prioridad", "estado").is_err());
         assert!(rename_property(dir.path(), "Tareas", "prioridad", " ").is_err());
+    }
+
+    #[test]
+    fn la_vista_sigue_a_la_columna_renombrada() {
+        let dir = vault();
+        let root = dir.path();
+        let tareas = root.join("Tareas");
+        let mut config = read_config(&tareas);
+        config.view = View::Board;
+        config.group_by = Some("estado".into());
+        write_config(&tareas, &config).unwrap();
+
+        rename_property(root, "Tareas", "estado", "fase").unwrap();
+        let config = read_config(&tareas);
+        assert_eq!(config.view, View::Board);
+        assert_eq!(config.group_by.as_deref(), Some("fase"));
+
+        delete_property(root, "Tareas", "fase").unwrap();
+        assert_eq!(read_config(&tareas).group_by, None);
+    }
+
+    #[test]
+    fn configuracion_antigua_sigue_valiendo() {
+        let config: Config = serde_json::from_str(r#"{"columns":[]}"#).unwrap();
+        assert_eq!(config.view, View::Table);
     }
 
     #[test]

@@ -48,7 +48,7 @@ function asList(value: PropValue | undefined): string[] {
 }
 
 /** «2026-10-25» → «25 oct 2026». Si no es una fecha, se deja igual. */
-function formatDate(value: string) {
+export function formatDate(value: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!m) return value;
   const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));

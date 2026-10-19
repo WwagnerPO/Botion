@@ -1,0 +1,173 @@
+import { useRef, useState } from "react";
+import {
+  valueText,
+  type Column,
+  type Database,
+  type PropValue,
+  type Props,
+  type Row,
+} from "../lib/database";
+import { Pill, formatDate } from "./PropertyInput";
+
+interface Props_ {
+  db: Database;
+  rows: Row[];
+  options: Record<string, string[]>;
+  onOpenNote: (path: string) => void;
+  onChangeValue: (rowPath: string, column: string, value: PropValue) => void;
+  onNewRow: (preset: Props) => void;
+  onGroupBy: (column: string) => void;
+}
+
+const NONE = "\u0000sin-valor";
+
+/** Columnas por las que se puede agrupar el kanban. */
+export function groupableColumns(columns: Column[]) {
+  return columns.filter((c) => c.kind === "select" || c.kind === "text");
+}
+
+/** Vista kanban: una columna por cada valor de una propiedad de selección. */
+export function BoardView({
+  db,
+  rows,
+  options,
+  onOpenNote,
+  onChangeValue,
+  onNewRow,
+  onGroupBy,
+}: Props_) {
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  // Columnas ya vistas, para que no desaparezcan al vaciarlas arrastrando.
+  const seen = useRef(new Map<string, Set<string>>());
+  const candidates = groupableColumns(db.columns);
+  const column =
+    candidates.find((c) => c.name === db.group_by) ??
+    candidates.find((c) => c.kind === "select") ??
+    candidates[0];
+
+  if (!column) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Añade una propiedad de tipo Selección para agrupar las notas en el
+        kanban.
+      </p>
+    );
+  }
+
+  const known = seen.current.get(column.name) ?? new Set<string>();
+  for (const o of options[column.name] ?? []) known.add(o);
+  seen.current.set(column.name, known);
+  const groups = [NONE, ...[...known].sort((a, b) => a.localeCompare(b, "es"))];
+  const groupOf = (row: Row) => valueText(row.props[column.name]) || NONE;
+  const others = db.columns.filter((c) => c.name !== column.name).slice(0, 3);
+
+  function drop(e: React.DragEvent, group: string) {
+    e.preventDefault();
+    setDragOver(null);
+    const path = e.dataTransfer.getData("text/x-botion-row");
+    const row = rows.find((r) => r.path === path);
+    if (row && groupOf(row) !== group) {
+      onChangeValue(path, column!.name, group === NONE ? null : group);
+    }
+  }
+
+  return (
+    <div>
+      <label className="mb-3 flex items-center gap-2 text-sm text-neutral-500">
+        Agrupar por
+        <select
+          value={column.name}
+          onChange={(e) => onGroupBy(e.target.value)}
+          className="rounded border border-neutral-200 bg-transparent px-1.5 py-0.5 dark:border-neutral-700"
+        >
+          {candidates.map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex items-start gap-3 overflow-x-auto pb-4">
+        {groups.map((group) => {
+          const cards = rows.filter((r) => groupOf(r) === group);
+          return (
+            <section
+              key={group}
+              aria-label={group === NONE ? "Sin valor" : group}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(group);
+              }}
+              onDragLeave={() => setDragOver((g) => (g === group ? null : g))}
+              onDrop={(e) => drop(e, group)}
+              className={`w-64 shrink-0 rounded-lg p-2 ${
+                dragOver === group
+                  ? "bg-violet-100 dark:bg-violet-950"
+                  : "bg-neutral-100 dark:bg-neutral-800/60"
+              }`}
+            >
+              <header className="mb-2 flex items-center gap-2 px-1 text-sm">
+                {group === NONE ? (
+                  <span className="text-neutral-500">Sin valor</span>
+                ) : (
+                  <Pill text={group} />
+                )}
+                <span className="text-xs text-neutral-400">{cards.length}</span>
+              </header>
+              <ul className="space-y-2">
+                {cards.map((row) => (
+                  <li
+                    key={row.path}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/x-botion-row", row.path);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    className="cursor-grab rounded-md border border-neutral-200 bg-white p-2 shadow-sm active:cursor-grabbing dark:border-neutral-700 dark:bg-neutral-900"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenNote(row.path)}
+                      className="block w-full truncate text-left text-sm font-medium hover:underline"
+                    >
+                      {row.name}
+                    </button>
+                    {others.map((c) => {
+                      const v = row.props[c.name];
+                      if (valueText(v) === "") return null;
+                      return (
+                        <div
+                          key={c.name}
+                          className="mt-1 flex flex-wrap gap-1 text-xs text-neutral-500"
+                        >
+                          {c.kind === "select" || c.kind === "tags"
+                            ? (Array.isArray(v) ? v : [String(v)]).map((t) => (
+                                <Pill key={t} text={t} />
+                              ))
+                            : c.kind === "checkbox"
+                              ? v === true && <span>✓ {c.name}</span>
+                              : c.kind === "date"
+                                ? formatDate(valueText(v))
+                                : valueText(v)}
+                        </div>
+                      );
+                    })}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  onNewRow(group === NONE ? {} : { [column.name]: group })
+                }
+                className="mt-2 w-full rounded px-2 py-1 text-left text-sm text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+              >
+                + Nueva
+              </button>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

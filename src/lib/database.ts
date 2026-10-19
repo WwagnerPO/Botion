@@ -22,11 +22,22 @@ export interface Row {
   error: string | null;
 }
 
-export interface Database {
-  path: string;
-  name: string;
+export type View = "table" | "board" | "calendar";
+
+/** Lo que se guarda en `.botion-db.json`. */
+export interface Config {
   columns: Column[];
   sort: Sort | null;
+  view: View;
+  /** Columna de selección que agrupa el kanban. */
+  group_by: string | null;
+  /** Columna de fecha que usa el calendario. */
+  date_by: string | null;
+}
+
+export interface Database extends Config {
+  path: string;
+  name: string;
   rows: Row[];
 }
 
@@ -43,10 +54,7 @@ export function getDatabase(path: string): Promise<Database> {
   return invoke<Database>("get_database", { path });
 }
 
-export function saveDatabaseConfig(
-  path: string,
-  config: { columns: Column[]; sort: Sort | null },
-): Promise<void> {
+export function saveDatabaseConfig(path: string, config: Config): Promise<void> {
   return invoke<void>("save_database_config", { path, config });
 }
 

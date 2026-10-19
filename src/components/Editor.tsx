@@ -18,6 +18,8 @@ interface Props {
   onAddProperty: () => void;
   /** Comando «/Base de datos». */
   onCreateDatabase: () => void;
+  /** Comando «/Plantilla»: pide elegir una e inserta su Markdown. */
+  onRequestTemplate: (insert: (markdown: string) => void) => void;
 }
 
 /**
@@ -31,6 +33,7 @@ export function Editor({
   onRequestLink,
   onAddProperty,
   onCreateDatabase,
+  onRequestTemplate,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -43,6 +46,8 @@ export function Editor({
   onAddPropertyRef.current = onAddProperty;
   const onCreateDatabaseRef = useRef(onCreateDatabase);
   onCreateDatabaseRef.current = onCreateDatabase;
+  const onRequestTemplateRef = useRef(onRequestTemplate);
+  onRequestTemplateRef.current = onRequestTemplate;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -82,6 +87,7 @@ export function Editor({
             requestLink: (insert) => onRequestLinkRef.current(insert),
             addProperty: () => onAddPropertyRef.current(),
             createDatabase: () => onCreateDatabaseRef.current(),
+            requestTemplate: (insert) => onRequestTemplateRef.current(insert),
           }),
         },
       },

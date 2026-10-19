@@ -32,9 +32,7 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Imagen, Código, Tabla, Fórmula |
-| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Propiedad, Base de datos, Fecha de hoy, Hora actual |
-
-Previsto: Plantilla (paso 8).
+| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Propiedad, Base de datos, Plantilla, Fecha de hoy, Hora actual |
 
 ### Bases de datos
 
@@ -45,7 +43,19 @@ Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en b
 - Ordenar, filtrar, añadir, renombrar y eliminar propiedades desde la cabecera.
 - Los datos están en el frontmatter de cada nota. La carpeta solo guarda la configuración de la vista en un fichero oculto `.botion-db.json`.
 
+Cada base de datos tiene tres vistas, y recuerda la última que usaste:
+
+- **Tabla:** edición directa de cada celda.
+- **Kanban:** una columna por cada valor de una propiedad de selección; arrastra las tarjetas para cambiar el valor.
+- **Calendario:** las notas en el día de una propiedad de fecha; arrastra para cambiar la fecha o pulsa `+` en un día para crear una nota con esa fecha.
+
 Las notas muestran sus propiedades encima del texto y se pueden editar ahí también.
+
+### Plantillas
+
+Las plantillas son notas normales de la carpeta `Plantillas`. Úsalas con `/Plantilla` (inserta el contenido en la nota abierta y le añade las propiedades que falten) o con clic derecho → «Nueva nota desde plantilla».
+
+Variables que se sustituyen al usarlas: `{{titulo}}`, `{{fecha}}` y `{{hora}}`.
 
 ### Ejemplo de nota con propiedades
 
@@ -81,7 +91,7 @@ Contenido normal en Markdown...
 5. [x] Gestionar notas: crear, renombrar (actualizando enlaces), borrar y detectar cambios externos.
 6. [x] Índice SQLite y búsqueda rápida.
 7. [x] Bases de datos: frontmatter + vista de tabla.
-8. [ ] Vistas kanban y calendario, plantillas.
+8. [x] Vistas kanban y calendario, plantillas.
 9. [ ] Sincronización opcional con Git.
 
 ## Desarrollo local
