@@ -1,5 +1,10 @@
 import {
   ChevronsUpDown,
+  Clock,
+  FileText,
+  Network,
+  Star,
+  type LucideIcon,
   Command,
   FilePlus2,
   FolderPlus,
@@ -15,14 +20,19 @@ import { ThemeToggle } from "./ThemeToggle";
 interface Props {
   vault: Vault | null;
   selected: string | null;
-  onSelect: (path: string) => void;
-  onSelectDatabase: (path: string) => void;
+  /** Con Ctrl se abre en pestaña nueva y con Alt a la derecha. */
+  onSelect: (path: string, e?: React.MouseEvent) => void;
+  onSelectDatabase: (path: string, e?: React.MouseEvent) => void;
+  favorites: string[];
+  recents: string[];
+  iconOf: (path: string) => string | undefined;
   onOpenVault: () => void;
   /** Nueva nota en `folder` (`""` es la raíz). */
   onNewNote: (folder?: string) => void;
   onNewFolder: () => void;
   onSearch: () => void;
   onCommands: () => void;
+  onGraph: () => void;
   /** Mover una nota o carpeta a otra carpeta (`""` es la raíz). */
   onMove: (path: string, folder: string) => void;
   /** Contenido extra al pie (estado de Git). */
@@ -47,10 +57,21 @@ export function Sidebar({
   onNewFolder,
   onSearch,
   onCommands,
+  onGraph,
   onContextMenu,
   onMove,
   footer,
+  favorites,
+  recents,
+  iconOf,
 }: Props) {
+  // Solo las que siguen existiendo en la bóveda.
+  const existing = new Set<string>();
+  const collect = (nodes: TreeNode[]) =>
+    nodes.forEach((n) => (n.kind === "folder" ? collect(n.children) : existing.add(n.path)));
+  collect(vault?.tree ?? []);
+  const favs = favorites.filter((p) => existing.has(p));
+  const recent = recents.filter((p) => existing.has(p) && !favs.includes(p)).slice(0, 5);
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-200/80 bg-neutral-50 text-sm dark:border-neutral-800 dark:bg-neutral-900">
       <header className="flex items-center gap-1 px-2 pt-2 pb-1">
@@ -93,6 +114,10 @@ export function Sidebar({
             <span className="flex-1">Comandos</span>
             <kbd>Ctrl P</kbd>
           </button>
+          <button type="button" onClick={onGraph} className={navItem}>
+            <Network className="size-4" />
+            <span className="flex-1">Grafo</span>
+          </button>
         </div>
       )}
 
@@ -109,6 +134,12 @@ export function Sidebar({
           }
         }}
       >
+        {vault && favs.length > 0 && (
+          <PathSection title="Favoritas" Icon={Star} paths={favs} selected={selected} iconOf={iconOf} onSelect={onSelect} />
+        )}
+        {vault && recent.length > 0 && (
+          <PathSection title="Recientes" Icon={Clock} paths={recent} selected={selected} iconOf={iconOf} onSelect={onSelect} />
+        )}
         {vault && (
           <div className="group/section flex items-center justify-between px-2 pt-2 pb-1">
             <span className="text-xs font-medium text-neutral-400">Notas</span>
@@ -172,5 +203,56 @@ export function Sidebar({
         <ThemeToggle />
       </footer>
     </aside>
+  );
+}
+
+/** Lista corta de notas (favoritas o recientes) encima del árbol. */
+function PathSection({
+  title,
+  Icon,
+  paths,
+  selected,
+  iconOf,
+  onSelect,
+}: {
+  title: string;
+  Icon: LucideIcon;
+  paths: string[];
+  selected: string | null;
+  iconOf: (path: string) => string | undefined;
+  onSelect: (path: string, e?: React.MouseEvent) => void;
+}) {
+  return (
+    <section aria-label={title} className="mb-1">
+      <p className="flex items-center gap-1.5 px-2 pt-2 pb-1 text-xs font-medium text-neutral-400">
+        <Icon className="size-3" /> {title}
+      </p>
+      <ul>
+        {paths.map((p) => {
+          const icon = iconOf(p);
+          return (
+            <li key={p}>
+              <button
+                type="button"
+                onClick={(e) => onSelect(p, e)}
+                title={p}
+                className={`flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left ${
+                  selected === p
+                    ? "bg-neutral-200/80 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-50"
+                    : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70"
+                }`}
+              >
+                {icon ? (
+                  <span className="grid size-4 shrink-0 place-items-center text-[15px] leading-none">{icon}</span>
+                ) : (
+                  <FileText className="size-4 shrink-0 text-neutral-400" strokeWidth={1.75} />
+                )}
+                <span className="truncate">{p.split("/").pop()!.replace(/\.md$/i, "")}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

@@ -51,6 +51,19 @@ pub struct SearchHit {
     pub snippet: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GraphNode {
+    pub path: String,
+    pub name: String,
+}
+
+/// Notas y enlaces (índices de `nodes`, sin dirección).
+#[derive(Debug, Serialize)]
+pub struct Graph {
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<(usize, usize)>,
+}
+
 pub struct Index {
     conn: Connection,
     root: PathBuf,
@@ -263,6 +276,44 @@ impl Index {
         Ok(hits)
     }
 
+    /// Grafo de la bóveda: todas las notas y los enlaces entre ellas (sin
+    /// repetir y solo los que apuntan a una nota que existe).
+    pub fn graph(&self) -> Res<Graph> {
+        let notes = self.notes()?;
+        let index: HashMap<&str, usize> = notes
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.as_str(), i))
+            .collect();
+        let mut stmt = self.conn.prepare("SELECT source, target FROM links")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut edges = HashSet::new();
+        for row in rows {
+            let (source, target) = row?;
+            let (Some(&a), Some(b)) = (
+                index.get(source.as_str()),
+                resolve_link(&target, &source, &notes).and_then(|t| index.get(t)),
+            ) else {
+                continue;
+            };
+            if a != *b {
+                edges.insert((a.min(*b), a.max(*b)));
+            }
+        }
+        let mut edges: Vec<_> = edges.into_iter().collect();
+        edges.sort_unstable();
+        Ok(Graph {
+            nodes: notes
+                .iter()
+                .map(|p| GraphNode {
+                    name: stem(p).to_string(),
+                    path: p.clone(),
+                })
+                .collect(),
+            edges,
+        })
+    }
+
     /// Notas que enlazan a `target_path`, con la línea del primer enlace.
     pub fn backlinks(&self, target_path: &str) -> Res<Vec<Backlink>> {
         let notes = self.notes()?;
@@ -333,6 +384,11 @@ pub fn search_notes(
     state: tauri::State<'_, VaultState>,
 ) -> Result<Vec<SearchHit>, String> {
     with_index(&state, |i| i.search(&query, 30))
+}
+
+#[tauri::command(async)]
+pub fn get_graph(state: tauri::State<'_, VaultState>) -> Result<Graph, String> {
+    with_index(&state, |i| i.graph())
 }
 
 #[tauri::command(async)]
@@ -425,6 +481,23 @@ mod tests {
         write(root, "C.md", "cinco");
         i.update("C.md").unwrap();
         assert_eq!(paths(&i.search("cinco", 10).unwrap()), ["C.md"]);
+    }
+
+    #[test]
+    fn grafo_de_enlaces() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(
+            root,
+            "A.md",
+            "[[B]] y [[C]] y [[B]] y [[No existe]] y [[A]]",
+        );
+        write(root, "B.md", "[[A]]");
+        write(root, "C.md", "");
+        let g = index(root).graph().unwrap();
+        let names: Vec<_> = g.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, ["A", "B", "C"]);
+        assert_eq!(g.edges, [(0, 1), (0, 2)]);
     }
 
     #[test]

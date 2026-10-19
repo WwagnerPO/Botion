@@ -32,7 +32,7 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Código, Tabla, Fórmula |
-| Botion | Página (crea una nota y la enlaza), Imagen, Vídeo, Audio, Archivo, YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
+| Botion | Página (crea una nota y la enlaza), Mención, Imagen, Vídeo, Audio, Archivo, YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
 
 Todo se guarda con sintaxis compatible con Obsidian:
 
@@ -58,8 +58,22 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | `Ctrl+F` | Buscar en la nota (`Enter` / `Mayús+Enter` para moverse) |
 | `Ctrl+N` | Nueva nota |
 | `Ctrl+Mayús+H` | Resaltar |
+| `@` | Mencionar una nota o una fecha |
+| `Ctrl+clic` | Abrir en pestaña nueva |
+| `Alt+clic` | Abrir a la derecha (dos notas lado a lado) |
+| `Ctrl+W` | Cerrar pestaña |
+| `Ctrl+Tab` / `Ctrl+Mayús+Tab` | Pestaña siguiente / anterior |
 
 En macOS, `Cmd` en lugar de `Ctrl`.
+
+### Navegación
+
+- **Pestañas:** `Ctrl+clic` en una nota (o clic derecho → «Abrir en pestaña nueva»). El clic normal cambia la pestaña activa.
+- **Dos notas lado a lado:** `Alt+clic` o clic derecho → «Abrir a la derecha». Cada una se guarda sola.
+- **Favoritas y recientes:** la estrella de arriba a la derecha de la nota la añade a «Favoritas»; las últimas abiertas salen en «Recientes».
+- **Grafo:** en la barra lateral. Cada nota es un punto y cada enlace una línea; «Solo alrededor de la nota abierta» muestra su entorno.
+- **Historial:** el reloj de arriba a la derecha. Muestra las versiones guardadas con Git (al sincronizar o con «Guardar versión ahora») y permite restaurar una.
+- **Convertir en…:** pulsa el asa ⋮⋮ a la izquierda de un bloque para convertirlo (texto, títulos, listas, cita, código), duplicarlo o eliminarlo. Arrástrala para moverlo.
 
 ### Icono y portada
 
@@ -211,12 +225,33 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 
 **Editor y navegación**
 
-- [ ] Menciones con `@` (nota o fecha).
-- [ ] Pestañas o dos notas lado a lado.
-- [ ] Grafo de enlaces entre notas.
-- [ ] Historial de una nota con Git: ver y restaurar versiones.
-- [ ] Notas favoritas y recientes en la barra lateral.
-- [ ] Arrastrar bloques para reordenarlos y «Convertir en…».
+- [x] Menciones con `@` (nota o fecha).
+- [x] Pestañas o dos notas lado a lado.
+- [x] Grafo de enlaces entre notas.
+- [x] Historial de una nota con Git: ver y restaurar versiones.
+- [x] Notas favoritas y recientes en la barra lateral.
+- [x] Arrastrar bloques para reordenarlos y «Convertir en…».
+
+**Ideas (lo que más se pide a Notion y aún no tiene)**
+
+- [ ] Modo sin distracciones: ancho completo, tipografía (serif/mono) y texto pequeño por nota.
+- [ ] Índice lateral de la nota (esquema de títulos siempre visible) y contador de palabras.
+- [ ] Notas diarias con un clic (`Diario/2026-10-19.md`) y plantilla propia.
+- [ ] Tareas con fecha de vencimiento y recordatorios (notificaciones del sistema).
+- [ ] Tareas recurrentes (cada semana, cada mes…) en las bases de datos.
+- [ ] Fechas en lenguaje natural («el viernes», «dentro de 3 días»).
+- [ ] Colores de texto y de fondo, y columnas dentro de una nota.
+- [ ] Notas al pie y comentarios en el margen.
+- [ ] Gráficos a partir de una base de datos (barras, líneas, tarta).
+- [ ] Formato condicional en tablas (colorear filas según un valor).
+- [ ] Plantillas por base de datos y botones que crean filas.
+- [ ] Bloques sincronizados (el mismo bloque en varias notas).
+- [ ] Ver PDFs dentro de la nota y subrayarlos.
+- [ ] Recortador web: guardar una página como nota.
+- [ ] Notas cifradas con contraseña.
+- [ ] Atajos de Vim opcionales.
+- [ ] Sincronización sin Git (carpeta en la nube, WebDAV, Syncthing) con avisos de conflicto.
+- [ ] App para el móvil que abra la misma bóveda.
 
 **Extras**
 

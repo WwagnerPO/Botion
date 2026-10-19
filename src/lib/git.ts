@@ -67,3 +67,27 @@ export function describeSync(r: SyncResult): string {
   if (r.pushed) parts.push("subido al remoto");
   return parts.length ? `Sincronizado: ${parts.join(", ")}.` : "Todo estaba al día.";
 }
+
+/** Una versión guardada de una nota. */
+export interface Version {
+  hash: string;
+  /** Segundos desde 1970. */
+  date: number;
+  author: string;
+  message: string;
+  /** Ruta de la nota en esa versión. */
+  path: string;
+}
+
+export function gitHistory(path: string) {
+  return invoke<Version[]>("git_history", { path });
+}
+
+export function gitFileAt(hash: string, path: string) {
+  return invoke<string>("git_file_at", { hash, path });
+}
+
+/** Guarda ahora una versión de la bóveda; `false` si no había cambios. */
+export function gitSaveVersion(message = "") {
+  return invoke<boolean>("git_save_version", { message });
+}

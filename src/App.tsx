@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
+  AtSign,
   CircleAlert,
   FolderOpen,
   Info,
@@ -18,11 +19,16 @@ import { DatabaseView } from "./components/DatabaseView";
 import { Dialog, type DialogRequest } from "./components/Dialog";
 import { Editor } from "./components/Editor";
 import { GitPanel } from "./components/GitPanel";
+import { GraphView } from "./components/GraphView";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { NoteTopBar } from "./components/NoteTopBar";
 import { PageHeader } from "./components/PageHeader";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
+import { SplitPane } from "./components/SplitPane";
+import { TabBar } from "./components/TabBar";
+import { relocate, usePathList, type Tab } from "./lib/navigation";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { linkChecker } from "./lib/wikilink";
 import { applyTheme } from "./lib/theme";
@@ -47,6 +53,8 @@ import {
   type Props,
 } from "./lib/database";
 import { joinFrontmatter, splitFrontmatter } from "./lib/frontmatter";
+import type { Mention } from "./lib/blocks";
+import { dateOptions } from "./lib/mentions";
 import {
   EXAMPLE_TEMPLATE,
   TEMPLATES_FOLDER,
@@ -68,6 +76,7 @@ import {
   refreshTree,
   renameEntry,
   resolveNoteLink,
+  searchNotes,
   setLastVault,
   writeNote,
   type Backlink,
@@ -170,6 +179,20 @@ export default function App() {
   const closeDialog = useCallback(() => setDialog(null), []);
   const closeSearch = useCallback(() => setSearching(false), []);
   const closeLinkPicker = useCallback(() => setLinkRequest(null), []);
+  /** Mención «@» pendiente: nota o fecha. */
+  const [mentionRequest, setMentionRequest] = useState<((m: Mention) => void) | null>(null);
+  const closeMentionPicker = useCallback(() => setMentionRequest(null), []);
+  const closeGraph = useCallback(() => setGraphOpen(false), []);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  /** Pestañas abiertas; la activa es la nota o base de datos que se ve. */
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTab, setActiveTab] = useState(0);
+  /** Nota abierta a la derecha (vista dividida). */
+  const [split, setSplit] = useState<string | null>(null);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [favorites, setFavorites] = usePathList("favoritas", vault?.root ?? null);
+  const [recents, setRecents] = usePathList("recientes", vault?.root ?? null, 12);
   /** Elección de plantilla pendiente: insertar en la nota o crear una nueva. */
   const [templateRequest, setTemplateRequest] = useState<
     | { mode: "insert"; insert: (markdown: string) => void }
@@ -658,6 +681,7 @@ export default function App() {
 
   /** Tras renombrar o mover: sigue en la nota o tabla abierta y avisa. */
   async function afterRelocate(oldPath: string, result: { path: string; updated_notes: number }) {
+    relocateLists(oldPath, result.path);
     await reloadTree();
     if (database && isInside(database, oldPath)) {
       setDatabase(result.path + database.slice(oldPath.length));
@@ -703,6 +727,7 @@ export default function App() {
         run(async () => {
           await autosaver.flush();
           await deleteEntry(node.path);
+          forgetPaths(node.path);
           if (noteRef.current && isInside(noteRef.current.path, node.path)) {
             setNote(null);
           }
@@ -757,6 +782,18 @@ export default function App() {
                       },
                 ]
               : []),
+            ...(node.kind === "note"
+              ? [
+                  { label: "Abrir en pestaña nueva", onSelect: () => openInNewTab({ kind: "note" as const, path: node.path }) },
+                  { label: "Abrir a la derecha", onSelect: () => openFrom(node.path, { altKey: true }) },
+                  {
+                    label: favorites.includes(node.path) ? "Quitar de favoritas" : "Añadir a favoritas",
+                    onSelect: () => toggleFavorite(node.path),
+                  },
+                ]
+              : node.database
+                ? [{ label: "Abrir en pestaña nueva", onSelect: () => openInNewTab({ kind: "database" as const, path: node.path }) }]
+                : []),
             { label: "Renombrar", onSelect: () => rename(node) },
             {
               label: "Mostrar en el explorador",
@@ -809,14 +846,127 @@ export default function App() {
     { id: "theme-dark", name: "Tema oscuro", run: () => applyTheme("dark") },
     { id: "theme-system", name: "Tema del sistema", run: () => applyTheme("system") },
     { id: "open-vault", name: "Abrir otra bóveda", run: () => handleOpenVault() },
+    { id: "graph", name: "Abrir el grafo de notas", run: () => setGraphOpen(true) },
+    { id: "history", name: "Historial de la nota", needsNote: true, run: () => setHistoryOpen(true) },
+    {
+      id: "favorite",
+      name: note && favorites.includes(note.path) ? "Quitar de favoritas" : "Añadir a favoritas",
+      needsNote: true,
+      run: () => note && toggleFavorite(note.path),
+    },
+    { id: "close-tab", name: "Cerrar pestaña", hint: "Ctrl+W", run: () => tabs.length && closeTab(activeTab) },
+    { id: "close-split", name: "Cerrar el panel derecho", run: () => setSplit(null) },
   ];
   const availableCommands = commands.filter((c) => !c.needsNote || note);
+
+  // --- Pestañas, vista dividida, favoritas y recientes ---
+
+  const current: Tab | null = note
+    ? { kind: "note", path: note.path }
+    : database
+      ? { kind: "database", path: database }
+      : null;
+
+  // La pestaña activa sigue a lo que se abre; las recientes también.
+  useEffect(() => {
+    if (!current) return;
+    setTabs((ts) => {
+      if (ts.length === 0) return [current];
+      const t = ts[activeTab];
+      if (t && t.path === current.path && t.kind === current.kind) return ts;
+      const next = [...ts];
+      next[Math.min(activeTab, ts.length - 1)] = current;
+      return next;
+    });
+    if (current.kind === "note") setRecents((r) => [current.path, ...r.filter((p) => p !== current.path)]);
+    if (split === current.path) setSplit(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.kind, current?.path]);
+
+  function openTab(tab: Tab) {
+    return tab.kind === "note" ? openNote(tab.path) : openDatabase(tab.path);
+  }
+
+  function openInNewTab(tab: Tab) {
+    setTabs((ts) => {
+      const base = ts.length ? ts : current ? [current] : [];
+      setActiveTab(base.length);
+      return [...base, tab];
+    });
+    openTab(tab);
+  }
+
+  function selectTab(i: number) {
+    const tab = tabs[i];
+    if (!tab) return;
+    setActiveTab(i);
+    openTab(tab);
+  }
+
+  function closeTab(i: number) {
+    const next = tabs.filter((_, j) => j !== i);
+    setTabs(next);
+    if (next.length === 0) {
+      setActiveTab(0);
+      autosaver.flush().then(() => {
+        setNote(null);
+        setDatabase(null);
+      });
+      return;
+    }
+    if (i === activeTab) {
+      const n = Math.min(i, next.length - 1);
+      setActiveTab(n);
+      openTab(next[n]);
+    } else if (i < activeTab) {
+      setActiveTab(activeTab - 1);
+    }
+  }
+
+  /** Abre en el árbol o en las listas, según la tecla: Ctrl pestaña nueva, Alt a la derecha. */
+  function openFrom(path: string, e?: React.MouseEvent | { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean }) {
+    if (e?.altKey && path !== note?.path) return setSplit(path);
+    if (e?.ctrlKey || e?.metaKey) return openInNewTab({ kind: "note", path });
+    openNote(path);
+  }
+
+  const toggleFavorite = (path: string) =>
+    setFavorites((f) => (f.includes(path) ? f.filter((p) => p !== path) : [...f, path]));
+
+  /** Tras renombrar o mover, las rutas guardadas siguen a las notas. */
+  function relocateLists(oldPath: string, newPath: string) {
+    const fix = (p: string) => relocate(p, oldPath, newPath);
+    setTabs((ts) => ts.map((t) => ({ ...t, path: fix(t.path) })));
+    setFavorites((f) => f.map(fix));
+    setRecents((r) => r.map(fix));
+    setSplit((s) => (s ? fix(s) : s));
+  }
+
+  function forgetPaths(removed: string) {
+    const keep = (p: string) => !isInside(p, removed);
+    setTabs((ts) => ts.filter((t) => keep(t.path)));
+    setFavorites((f) => f.filter(keep));
+    setRecents((r) => r.filter(keep));
+    setSplit((s) => (s && keep(s) ? s : null));
+  }
 
   // Atajos: Ctrl/Cmd + N nueva nota; K buscar notas; P comandos; F buscar en la nota.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || !vault) return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || !vault) return;
+      // Ctrl+Tab y Ctrl+Mayús+Tab: pestaña siguiente y anterior.
+      if (e.key === "Tab" && tabs.length > 1) {
+        e.preventDefault();
+        selectTab((activeTab + (e.shiftKey ? -1 : 1) + tabs.length) % tabs.length);
+        return;
+      }
+      if (e.shiftKey) return;
       const key = e.key.toLowerCase();
+      if (key === "w" && tabs.length > 0) {
+        e.preventDefault();
+        closeTab(activeTab);
+        return;
+      }
       if (key === "n") {
         e.preventDefault();
         newNote();
@@ -835,6 +985,49 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  /** Icono (emoji) de una nota según el árbol. */
+  function iconOf(path: string) {
+    const find = (nodes: TreeNode[]): string | undefined => {
+      for (const n of nodes) {
+        if (n.kind === "note" && n.path === path) return n.icon;
+        if (n.kind === "folder" && path.startsWith(n.path + "/")) return find(n.children);
+      }
+    };
+    return find(vault?.tree ?? []);
+  }
+
+  /** Lo que necesita el editor del panel derecho. */
+  function splitEditorProps(path: string) {
+    const onlyMain = () => setNotice("Esto se hace en el panel principal (Abrir aquí ←).");
+    return {
+      onOpenLink: async (target: string) => {
+        const found = await resolveNoteLink(target, path).catch(() => null);
+        if (found) setSplit(found);
+        else setNotice(`No existe la nota «${target}»`);
+      },
+      onRequestLink: (insert: (target: string) => void) => setLinkRequest(() => insert),
+      onAddProperty: onlyMain,
+      onCreateDatabase: onlyMain,
+      onRequestTemplate: (insert: (markdown: string) => void) => chooseTemplate({ mode: "insert", insert }),
+      linkExists,
+      onRequestPage: requestPage,
+      onNotify: setNotice,
+      onRequestDatabase: (insert: (folder: string) => void) => setDbPicker(() => insert),
+      embedHost,
+      vaultRoot: vault?.root ?? "",
+      onError: showError,
+      onExport: onlyMain,
+      onSetPageIcon: (icon: string) => run(async () => {
+        await setProperty(path, ICON_KEY, icon);
+        await reloadTree();
+      }),
+      onAddCover: onlyMain,
+      onRequestMention: (insert: (m: Mention) => void) => setMentionRequest(() => insert),
+      onRequestUrl: (title: string, insert: (url: string) => void) =>
+        setDialog({ kind: "prompt", title, label: "Dirección (https://…)", initial: "", confirm: "Insertar", onConfirm: (url) => insert(url) }),
+    };
+  }
+
   const noteIcon = typeof props[ICON_KEY] === "string" ? (props[ICON_KEY] as string) : null;
   const noteCover = typeof props[COVER_KEY] === "string" ? (props[COVER_KEY] as string) : null;
   const visibleProps = Object.fromEntries(
@@ -846,13 +1039,19 @@ export default function App() {
       <Sidebar
         vault={vault}
         selected={note?.path ?? database}
-        onSelect={(path) => openNote(path)}
-        onSelectDatabase={openDatabase}
+        onSelect={(path, e) => openFrom(path, e)}
+        onSelectDatabase={(path, e) =>
+          e?.ctrlKey || e?.metaKey ? openInNewTab({ kind: "database", path }) : openDatabase(path)
+        }
+        favorites={favorites}
+        recents={recents}
+        iconOf={iconOf}
         onOpenVault={handleOpenVault}
         onNewNote={(folder) => newNote(folder)}
         onNewFolder={() => newFolder()}
         onSearch={() => setSearching(true)}
         onCommands={() => setCommandsOpen(true)}
+        onGraph={() => setGraphOpen(true)}
         onContextMenu={handleContextMenu}
         onMove={moveTo}
         footer={
@@ -905,6 +1104,14 @@ export default function App() {
             )}
           </div>
         )}
+        <TabBar
+          tabs={tabs}
+          active={activeTab}
+          iconOf={iconOf}
+          onSelect={selectTab}
+          onClose={closeTab}
+        />
+        <div className="flex min-h-0 flex-1">
         {note ? (
           <div
             className="flex-1 overflow-y-auto"
@@ -914,6 +1121,9 @@ export default function App() {
             onDropCapture={markEdit}
           >
             <NoteTopBar
+              favorite={favorites.includes(note.path)}
+              onToggleFavorite={() => toggleFavorite(note.path)}
+              onHistory={() => setHistoryOpen(true)}
               path={note.path}
               icon={noteIcon}
               status={STATUS_TEXT[status]}
@@ -990,6 +1200,7 @@ export default function App() {
                     changeProperty(COVER_KEY, names[Math.floor(Math.random() * names.length)], true);
                   }
                 }}
+                onRequestMention={(insert) => setMentionRequest(() => insert)}
                 onRequestUrl={(title, insert) =>
                   setDialog({
                     kind: "prompt",
@@ -1068,7 +1279,45 @@ export default function App() {
             </div>
           </div>
         )}
+          {split && vault && (
+            <SplitPane
+              path={split}
+              icon={iconOf(split)}
+              editorProps={splitEditorProps(split)}
+              onClose={() => setSplit(null)}
+              onOpenMain={(path) => {
+                setSplit(null);
+                openNote(path);
+              }}
+              onError={showError}
+            />
+          )}
+        </div>
       </main>
+      {graphOpen && (
+        <GraphView
+          current={note?.path ?? null}
+          onOpen={(path) => {
+            setGraphOpen(false);
+            openNote(path);
+          }}
+          onClose={closeGraph}
+        />
+      )}
+      {historyOpen && note && (
+        <HistoryPanel
+          path={note.path}
+          onClose={closeHistory}
+          beforeSave={() => autosaver.flush()}
+          onError={showError}
+          onRestore={async (content) => {
+            await autosaver.flush();
+            await writeNote(note.path, content);
+            await openNote(note.path, true);
+            setNotice("Versión restaurada. La anterior sigue en el historial.");
+          }}
+        />
+      )}
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
       {commandsOpen && (
@@ -1124,6 +1373,27 @@ export default function App() {
           }
           onCreate={() => {}}
           onClose={closeTemplatePicker}
+        />
+      )}
+      {mentionRequest && (
+        <SearchPalette
+          placeholder="Mencionar una nota o una fecha…"
+          recentLabel="Fechas y notas"
+          allowCreate={false}
+          icon={AtSign}
+          source={async (query) => [
+            ...dateOptions(query).map((d) => ({ path: `\u0000fecha:${d.date}`, name: d.label, snippet: d.date })),
+            ...(await searchNotes(query)).slice(0, 12),
+          ]}
+          onOpen={(path) =>
+            mentionRequest(
+              path.startsWith("\u0000fecha:")
+                ? { kind: "date", text: path.slice(7) }
+                : { kind: "note", target: linkTarget(path) },
+            )
+          }
+          onCreate={() => {}}
+          onClose={closeMentionPicker}
         />
       )}
       {linkRequest && (

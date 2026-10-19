@@ -128,3 +128,14 @@ export function setLastVault(path: string | null) {
     // Sin almacenamiento: simplemente no se recuerda la bóveda.
   }
 }
+
+export interface Graph {
+  nodes: { path: string; name: string }[];
+  /** Pares de índices de `nodes`. */
+  edges: [number, number][];
+}
+
+/** Notas y enlaces de la bóveda, para la vista de grafo. */
+export function getGraph(): Promise<Graph> {
+  return invoke<Graph>("get_graph");
+}
