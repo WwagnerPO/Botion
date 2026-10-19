@@ -1,5 +1,5 @@
 import type { TreeNode, Vault } from "../lib/vault";
-import { FileTree } from "./FileTree";
+import { FileTree, TREE_DRAG } from "./FileTree";
 import { ThemeToggle } from "./ThemeToggle";
 import type { ReactNode } from "react";
 
@@ -12,6 +12,8 @@ interface Props {
   onNewNote: () => void;
   onNewFolder: () => void;
   onSearch: () => void;
+  /** Mover una nota o carpeta a otra carpeta (`""` es la raíz). */
+  onMove: (path: string, folder: string) => void;
   /** Contenido extra al pie (estado de Git). */
   footer?: ReactNode;
   /** `node` es `null` al hacer clic derecho en una zona vacía. */
@@ -31,6 +33,7 @@ export function Sidebar({
   onNewFolder,
   onSearch,
   onContextMenu,
+  onMove,
   footer,
 }: Props) {
   return (
@@ -102,6 +105,15 @@ export function Sidebar({
       <nav
         className="flex-1 overflow-y-auto px-2 pb-4 text-sm text-neutral-600 dark:text-neutral-400"
         onContextMenu={(e) => vault && onContextMenu(null, e)}
+        // Soltar en una zona vacía mueve a la raíz de la bóveda.
+        onDragOver={(e) => e.dataTransfer.types.includes(TREE_DRAG) && e.preventDefault()}
+        onDrop={(e) => {
+          const path = e.dataTransfer.getData(TREE_DRAG);
+          if (path) {
+            e.preventDefault();
+            onMove(path, "");
+          }
+        }}
       >
         {!vault && (
           <p className="px-2 py-1 text-neutral-500">
@@ -119,6 +131,7 @@ export function Sidebar({
             selected={selected}
             onSelect={onSelect}
             onSelectDatabase={onSelectDatabase}
+            onMove={onMove}
             onContextMenu={(node, e) => {
               e.stopPropagation();
               onContextMenu(node, e);

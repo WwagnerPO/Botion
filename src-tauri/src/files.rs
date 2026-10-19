@@ -97,6 +97,36 @@ pub fn rename(root: &Path, path: &str, new_name: &str) -> Result<Renamed, String
     } else {
         format!("{parent}/{file_name}")
     };
+    relocate(root, path, &new_path)
+}
+
+/// Mueve una nota o carpeta a otra carpeta (`""` es la raíz de la bóveda)
+/// y actualiza los enlaces.
+pub fn move_to(root: &Path, path: &str, folder: &str) -> Result<Renamed, String> {
+    let folder = folder.trim_matches('/');
+    if folder == path || folder.starts_with(&format!("{path}/")) {
+        return Err("No se puede mover una carpeta dentro de sí misma".into());
+    }
+    vault::resolve_dir(root, folder)?;
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let new_path = if folder.is_empty() {
+        name.to_string()
+    } else {
+        format!("{folder}/{name}")
+    };
+    relocate(root, path, &new_path)
+}
+
+/// Cambia la ruta de una nota o carpeta y arregla los enlaces `[[...]]`:
+/// los que apuntaban a lo movido y los que, desde lo movido, dejarían de
+/// apuntar a la misma nota (porque se buscan primero en la misma carpeta).
+fn relocate(root: &Path, path: &str, new_path: &str) -> Result<Renamed, String> {
+    let from = vault::resolve(root, path)?;
+    let is_dir = from.is_dir();
+    if !is_dir && !vault::is_markdown(&from) {
+        return Err("Solo se pueden mover notas .md y carpetas".into());
+    }
+    let new_path = new_path.to_string();
     if new_path == path {
         return Ok(Renamed {
             path: new_path,
@@ -110,7 +140,7 @@ pub fn rename(root: &Path, path: &str, new_name: &str) -> Result<Renamed, String
     }
 
     let old_notes = all_notes(root)?;
-    fs::rename(&from, &to).map_err(|e| format!("No se pudo renombrar: {e}"))?;
+    fs::rename(&from, &to).map_err(|e| format!("No se pudo mover: {e}"))?;
     let new_notes = all_notes(root)?;
 
     // Ruta antigua -> nueva de cada nota afectada.
@@ -137,7 +167,13 @@ pub fn rename(root: &Path, path: &str, new_name: &str) -> Result<Renamed, String
             continue;
         };
         let updated = rewrite_links(&content, |target| {
-            let new = moved.get(resolve_link(target, old_note, &old_notes)?)?;
+            let old = resolve_link(target, old_note, &old_notes)?;
+            let new = moved.get(old).cloned().unwrap_or_else(|| old.to_string());
+            // Si sigue apuntando a la misma nota, no se toca.
+            if resolve_link(target, note, &new_notes) == Some(new.as_str()) {
+                return None;
+            }
+            let new = &new;
             // Se mantiene el estilo del enlace: por nombre si sigue siendo
             // inequívoco, si no por ruta.
             let by_name = stem(new);
@@ -172,6 +208,17 @@ pub fn rename_entry(
     let renamed = rename(&vault::current_root(&state)?, &path, &new_name)?;
     vault::sync_index(&state)?;
     Ok(renamed)
+}
+
+#[tauri::command(async)]
+pub fn move_entry(
+    path: String,
+    folder: String,
+    state: tauri::State<'_, VaultState>,
+) -> Result<Renamed, String> {
+    let moved = move_to(&vault::current_root(&state)?, &path, &folder)?;
+    vault::sync_index(&state)?;
+    Ok(moved)
 }
 
 /// Mueve una nota o carpeta a la papelera del sistema.
@@ -271,6 +318,56 @@ mod tests {
         assert_eq!(r.path, "Trabajo");
         assert_eq!(read(root, "Inicio.md"), "[[Trabajo/Botion]] y [[Ideas]]\n");
         assert_eq!(read(root, "Trabajo/Botion.md"), "Ver [[Trabajo/Ideas]].\n");
+    }
+
+    #[test]
+    fn mover_nota_actualiza_enlaces_en_los_dos_sentidos() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "Proyectos/Plan.md", "Ver [[Ideas]] y [[Inicio]].\n");
+        write(root, "Proyectos/Ideas.md", "# Ideas del proyecto\n");
+        write(root, "Ideas.md", "# Otras ideas\n");
+        write(root, "Inicio.md", "Ir a [[Proyectos/Plan]] o [[Plan]].\n");
+        fs::create_dir(root.join("Archivo")).unwrap();
+
+        let r = move_to(root, "Proyectos/Plan.md", "Archivo").unwrap();
+
+        assert_eq!(r.path, "Archivo/Plan.md");
+        assert!(root.join("Archivo/Plan.md").exists());
+        // Desde Inicio: el enlace por ruta cambia; el de nombre sigue valiendo.
+        assert_eq!(
+            read(root, "Inicio.md"),
+            "Ir a [[Archivo/Plan]] o [[Plan]].\n"
+        );
+        // Desde Plan: [[Ideas]] apuntaba a la de su carpeta; ahora se escribe
+        // con ruta para no acabar en la otra «Ideas».
+        assert_eq!(
+            read(root, "Archivo/Plan.md"),
+            "Ver [[Proyectos/Ideas]] y [[Inicio]].\n"
+        );
+    }
+
+    #[test]
+    fn mover_carpeta_y_errores() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "A/Nota.md", "");
+        write(root, "B/Otra.md", "");
+        assert!(move_to(root, "A", "A").is_err());
+        write(root, "A/Sub/x.md", "");
+        assert!(move_to(root, "A", "A/Sub").is_err());
+        assert!(move_to(root, "A/Nota.md", "NoExiste").is_err());
+
+        let r = move_to(root, "A", "B").unwrap();
+        assert_eq!(r.path, "B/A");
+        assert!(root.join("B/A/Nota.md").exists());
+        // A la raíz.
+        let r = move_to(root, "B/A/Nota.md", "").unwrap();
+        assert_eq!(r.path, "Nota.md");
+        // Encima de otra nota con el mismo nombre, no.
+        write(root, "B/Otra2.md", "");
+        write(root, "Otra2.md", "");
+        assert!(move_to(root, "B/Otra2.md", "").is_err());
     }
 
     #[test]

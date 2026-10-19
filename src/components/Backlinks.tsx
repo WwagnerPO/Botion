@@ -7,7 +7,7 @@ interface Props {
 
 export function Backlinks({ backlinks, onSelect }: Props) {
   return (
-    <section className="mx-14 mt-4 mb-16 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+    <section className="no-print mx-14 mt-4 mb-16 border-t border-neutral-200 pt-4 dark:border-neutral-800">
       <h2 className="mb-2 text-xs font-medium tracking-wide text-neutral-500 uppercase">
         Enlaces a esta nota ({backlinks.length})
       </h2>

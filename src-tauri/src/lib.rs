@@ -1,4 +1,6 @@
+mod attachments;
 mod database;
+mod export;
 mod files;
 mod git;
 mod index;
@@ -21,6 +23,7 @@ pub fn run() {
             files::create_note,
             files::create_folder,
             files::rename_entry,
+            files::move_entry,
             files::delete_entry,
             vault::refresh_tree,
             database::get_database,
@@ -33,6 +36,10 @@ pub fn run() {
             git::git_status,
             git::git_init,
             git::git_sync,
+            git::git_resolve,
+            attachments::save_attachment,
+            export::export_html,
+            export::print_page,
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Botion");

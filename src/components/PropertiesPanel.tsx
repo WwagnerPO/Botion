@@ -57,7 +57,7 @@ export function PropertiesPanel({
       <button
         type="button"
         onClick={onAdd}
-        className="mt-1 rounded px-1 text-sm text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+        className="no-print mt-1 rounded px-1 text-sm text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
       >
         + Añadir propiedad
       </button>

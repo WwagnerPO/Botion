@@ -11,6 +11,9 @@ import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { linkChecker } from "./lib/wikilink";
+import { applyTheme } from "./lib/theme";
+import { displayUrl } from "./lib/attachments";
+import { noteToHtml, printNote, saveHtml } from "./lib/export";
 import type { SyncResult } from "./lib/git";
 import {
   columnOptions,
@@ -35,6 +38,7 @@ import {
   deleteEntry,
   getBacklinks,
   getLastVault,
+  moveEntry,
   onNotesChanged,
   onVaultChanged,
   openVault,
@@ -92,6 +96,8 @@ export default function App() {
   } | null>(null);
   const [dialog, setDialog] = useState<DialogRequest | null>(null);
   const [searching, setSearching] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
   /** Comando «/Enlace a nota» esperando a que se elija una nota. */
   const [linkRequest, setLinkRequest] = useState<
     ((target: string) => void) | null
@@ -139,6 +145,9 @@ export default function App() {
     | null
   >(null);
   const closeTemplatePicker = useCallback(() => setTemplateRequest(null), []);
+  /** Comando «/Vista de base de datos» esperando a que se elija una. */
+  const [dbPicker, setDbPicker] = useState<((folder: string) => void) | null>(null);
+  const closeDbPicker = useCallback(() => setDbPicker(null), []);
   const showError = useCallback((message: string) => setError(message), []);
   const showMenu = useCallback(
     (x: number, y: number, items: MenuItem[]) => setMenu({ x, y, items }),
@@ -431,6 +440,74 @@ export default function App() {
     }
   }
 
+  // Lo que necesitan las incrustaciones ![[...]] del editor. Usa la nota
+  // abierta en el momento de cada llamada.
+  const openNoteRef = useRef(openNote);
+  openNoteRef.current = openNote;
+  const openDatabaseRef = useRef(openDatabase);
+  openDatabaseRef.current = openDatabase;
+  const embedHost = useMemo(
+    () => ({
+      resolve: (target: string) =>
+        resolveNoteLink(target, noteRef.current?.path ?? ""),
+      readNote,
+      getDatabase,
+      open: (path: string, kind: "note" | "database") =>
+        kind === "note" ? openNoteRef.current(path) : openDatabaseRef.current(path),
+    }),
+    [],
+  );
+
+  /** Bases de datos de la bóveda, para elegir una. */
+  function listDatabases() {
+    const out: { path: string; name: string }[] = [];
+    const walk = (nodes: TreeNode[]) =>
+      nodes.forEach((n) => {
+        if (n.kind !== "folder") return;
+        if (n.database) out.push({ path: n.path, name: n.name });
+        walk(n.children);
+      });
+    walk(vault?.tree ?? []);
+    return out;
+  }
+
+  /** Exporta la nota abierta a HTML (un fichero) o a PDF (imprimir). */
+  async function exportNote(format: "html" | "pdf") {
+    const current = noteRef.current;
+    if (!current || !vault) return;
+    await autosaver.flush();
+    if (format === "pdf") {
+      await printNote();
+      return;
+    }
+    await run(async () => {
+      const name = current.path.split("/").pop()!.replace(/\.md$/, "");
+      const html = await noteToHtml(name, await readNote(current.path), props, (src) =>
+        displayUrl(src, vault.root, current.path),
+      );
+      const saved = await saveHtml(name, html);
+      if (saved) setNotice(`Exportada a ${saved}`);
+    });
+  }
+
+  /** Comando «/Página»: crea una nota junto a la abierta y la enlaza. */
+  function requestPage(insert: (target: string) => void) {
+    const folder = noteRef.current?.path.split("/").slice(0, -1).join("/") ?? "";
+    setDialog({
+      kind: "prompt",
+      title: "Nueva página",
+      label: "Nombre",
+      initial: "Sin título",
+      confirm: "Crear",
+      onConfirm: (name) =>
+        run(async () => {
+          const path = await createNote(folder ? `${folder}/${name}` : name);
+          await reloadTree();
+          insert(linkTarget(path));
+        }),
+    });
+  }
+
   /** Nueva fila (nota) en una base de datos, sin salir de la tabla. */
   function newRow(folder: string, preset: Props = {}) {
     setDialog({
@@ -532,27 +609,41 @@ export default function App() {
       onConfirm: (name) =>
         run(async () => {
           await autosaver.flush();
-          const result = await renameEntry(node.path, name);
-          await reloadTree();
-          if (database && isInside(database, node.path)) {
-            setDatabase(result.path + database.slice(node.path.length));
-          }
-          const current = noteRef.current;
-          if (current) {
-            // La nota abierta puede haber cambiado de ruta o de enlaces.
-            const path = isInside(current.path, node.path)
-              ? result.path + current.path.slice(node.path.length)
-              : current.path;
-            await openNote(path, true);
-          }
-          if (result.updated_notes > 0) {
-            setNotice(
-              `Enlaces actualizados en ${result.updated_notes} ${
-                result.updated_notes === 1 ? "nota" : "notas"
-              }.`,
-            );
-          }
+          await afterRelocate(node.path, await renameEntry(node.path, name));
         }),
+    });
+  }
+
+  /** Tras renombrar o mover: sigue en la nota o tabla abierta y avisa. */
+  async function afterRelocate(oldPath: string, result: { path: string; updated_notes: number }) {
+    await reloadTree();
+    if (database && isInside(database, oldPath)) {
+      setDatabase(result.path + database.slice(oldPath.length));
+    }
+    const current = noteRef.current;
+    if (current) {
+      // La nota abierta puede haber cambiado de ruta o de enlaces.
+      const path = isInside(current.path, oldPath)
+        ? result.path + current.path.slice(oldPath.length)
+        : current.path;
+      await openNote(path, true);
+    }
+    if (result.updated_notes > 0) {
+      setNotice(
+        `Enlaces actualizados en ${result.updated_notes} ${
+          result.updated_notes === 1 ? "nota" : "notas"
+        }.`,
+      );
+    }
+  }
+
+  /** Arrastrar en el árbol: mueve una nota o carpeta a otra carpeta. */
+  function moveTo(path: string, folder: string) {
+    const parent = path.split("/").slice(0, -1).join("/");
+    if (parent === folder || folder === path) return;
+    run(async () => {
+      await autosaver.flush();
+      await afterRelocate(path, await moveEntry(path, folder));
     });
   }
 
@@ -656,17 +747,42 @@ export default function App() {
     });
   }
 
-  // Atajos: Ctrl/Cmd + N nueva nota; Ctrl/Cmd + K o P buscar.
+  /** Acciones de la paleta de comandos (Ctrl+P). */
+  const commands: { id: string; name: string; hint?: string; run: () => void; needsNote?: boolean }[] = [
+    { id: "new-note", name: "Nueva nota", hint: "Ctrl+N", run: () => newNote() },
+    { id: "new-folder", name: "Nueva carpeta", run: () => newFolder() },
+    { id: "new-db", name: "Nueva base de datos", run: () => createDatabaseHere() },
+    { id: "from-template", name: "Nueva nota desde plantilla", run: () => chooseTemplate({ mode: "new", folder: "" }) },
+    { id: "search", name: "Buscar notas", hint: "Ctrl+K", run: () => setSearching(true) },
+    { id: "find", name: "Buscar en la nota", hint: "Ctrl+F", run: () => setFindOpen(true), needsNote: true },
+    { id: "export-pdf", name: "Exportar a PDF", run: () => exportNote("pdf"), needsNote: true },
+    { id: "export-html", name: "Exportar a HTML", run: () => exportNote("html"), needsNote: true },
+    { id: "add-property", name: "Añadir propiedad a la nota", run: () => addProperty(), needsNote: true },
+    { id: "git-sync", name: "Sincronizar con Git", run: () => window.dispatchEvent(new Event("botion-git-sync")) },
+    { id: "theme-light", name: "Tema claro", run: () => applyTheme("light") },
+    { id: "theme-dark", name: "Tema oscuro", run: () => applyTheme("dark") },
+    { id: "theme-system", name: "Tema del sistema", run: () => applyTheme("system") },
+    { id: "open-vault", name: "Abrir otra bóveda", run: () => handleOpenVault() },
+  ];
+  const availableCommands = commands.filter((c) => !c.needsNote || note);
+
+  // Atajos: Ctrl/Cmd + N nueva nota; K buscar notas; P comandos; F buscar en la nota.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || !vault) return;
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || !vault) return;
       const key = e.key.toLowerCase();
       if (key === "n") {
         e.preventDefault();
         newNote();
-      } else if (key === "k" || key === "p") {
+      } else if (key === "k") {
         e.preventDefault();
         setSearching(true);
+      } else if (key === "p") {
+        e.preventDefault();
+        setCommandsOpen(true);
+      } else if (key === "f" && noteRef.current) {
+        e.preventDefault();
+        setFindOpen(true);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -685,6 +801,7 @@ export default function App() {
         onNewFolder={() => newFolder()}
         onSearch={() => setSearching(true)}
         onContextMenu={handleContextMenu}
+        onMove={moveTo}
         footer={
           vault && (
             <GitPanel
@@ -731,8 +848,24 @@ export default function App() {
           >
             <div className="mx-auto w-full max-w-3xl pt-10">
               <div className="mb-6 flex items-center justify-between px-14 text-xs text-neutral-400">
-                <span className="truncate">{note.path}</span>
-                <span aria-live="polite">{STATUS_TEXT[status]}</span>
+                <span className="no-print truncate">{note.path}</span>
+                <span className="no-print flex shrink-0 items-center gap-3">
+                  <span aria-live="polite">{STATUS_TEXT[status]}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      showMenu(r.left - 120, r.bottom + 4, [
+                        { label: "Exportar a PDF", onSelect: () => exportNote("pdf") },
+                        { label: "Exportar a HTML", onSelect: () => exportNote("html") },
+                      ]);
+                    }}
+                    className="rounded px-1.5 py-0.5 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                    title="Exportar"
+                  >
+                    Exportar
+                  </button>
+                </span>
               </div>
               <PropertiesPanel
                 path={note.path}
@@ -757,6 +890,16 @@ export default function App() {
                   chooseTemplate({ mode: "insert", insert })
                 }
                 linkExists={linkExists}
+                onRequestPage={requestPage}
+                onNotify={setNotice}
+                onRequestDatabase={(insert) => setDbPicker(() => insert)}
+                embedHost={embedHost}
+                vaultRoot={vault?.root ?? ""}
+                notePath={note.path}
+                onError={showError}
+                onExport={exportNote}
+                findOpen={findOpen}
+                onCloseFind={() => setFindOpen(false)}
               />
               <Backlinks
                 backlinks={backlinks}
@@ -797,6 +940,39 @@ export default function App() {
       </main>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {commandsOpen && (
+        <SearchPalette
+          placeholder="Escribe un comando…"
+          recentLabel="Comandos"
+          allowCreate={false}
+          source={async (query) => {
+            const fold = (t: string) =>
+              t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const q = fold(query.trim());
+            return availableCommands
+              .filter((c) => fold(c.name).includes(q))
+              .map((c) => ({ path: c.id, name: c.name, snippet: c.hint ?? "" }));
+          }}
+          onOpen={(id) => commands.find((c) => c.id === id)?.run()}
+          onCreate={() => {}}
+          onClose={() => setCommandsOpen(false)}
+        />
+      )}
+      {dbPicker && (
+        <SearchPalette
+          placeholder="Elegir base de datos…"
+          recentLabel="Bases de datos"
+          allowCreate={false}
+          source={async (query) =>
+            listDatabases()
+              .filter((d) => d.path.toLowerCase().includes(query.trim().toLowerCase()))
+              .map((d) => ({ ...d, snippet: "" }))
+          }
+          onOpen={(path) => dbPicker(path)}
+          onCreate={() => {}}
+          onClose={closeDbPicker}
+        />
+      )}
       {templateRequest && (
         <SearchPalette
           placeholder="Elegir plantilla…"

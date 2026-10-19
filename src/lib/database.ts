@@ -18,6 +18,8 @@ export interface Sort {
 export interface Row {
   path: string;
   name: string;
+  /** Subcarpeta dentro de la base de datos (`""` si está directamente). */
+  subfolder: string;
   props: Props;
   error: string | null;
 }
@@ -33,6 +35,8 @@ export interface Config {
   group_by: string | null;
   /** Columna de fecha que usa el calendario. */
   date_by: string | null;
+  /** Incluir las notas de las subcarpetas. */
+  subfolders: boolean;
 }
 
 export interface Database extends Config {

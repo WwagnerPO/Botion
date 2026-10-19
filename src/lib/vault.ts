@@ -82,6 +82,11 @@ export function renameEntry(path: string, newName: string): Promise<Renamed> {
   return invoke<Renamed>("rename_entry", { path, newName });
 }
 
+/** Mueve una nota o carpeta a otra carpeta y actualiza los enlaces. */
+export function moveEntry(path: string, folder: string): Promise<Renamed> {
+  return invoke<Renamed>("move_entry", { path, folder });
+}
+
 /** Mueve una nota o carpeta a la papelera del sistema. */
 export function deleteEntry(path: string): Promise<void> {
   return invoke<void>("delete_entry", { path });

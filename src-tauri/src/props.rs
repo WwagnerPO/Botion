@@ -68,39 +68,146 @@ pub fn write(content: &str, props: &Props) -> Result<String, String> {
     Ok(format!("---\n{yaml}---\n{sep}{body}"))
 }
 
-/// Cambia una propiedad (`None` la quita) y devuelve la nota nueva.
-pub fn set(content: &str, key: &str, value: Option<Value>) -> Result<String, String> {
-    let mut props = read(content)?;
-    match value {
-        Some(v) => {
-            props.insert(key.to_string(), v);
-        }
-        None => {
-            props.shift_remove(key);
-        }
-    }
-    write(content, &props)
+/// Una propiedad de primer nivel dentro del YAML: su nombre y las líneas
+/// que ocupa (la del nombre y las de su valor, si sigue en varias líneas).
+struct Entry {
+    key: String,
+    lines: std::ops::Range<usize>,
 }
 
-/// Renombra una propiedad conservando su posición. Si no existe, no cambia
-/// nada.
+fn entries(lines: &[&str]) -> Vec<Entry> {
+    let mut out: Vec<Entry> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let continues = line.starts_with([' ', '\t']) || line.starts_with("- ") || *line == "-";
+        if continues {
+            if let Some(last) = out.last_mut()
+                && last.lines.end == i
+            {
+                last.lines.end = i + 1;
+            }
+            continue;
+        }
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, _)) = line.split_once(':') {
+            let key = key.trim().trim_matches(['"', '\'']).to_string();
+            out.push(Entry {
+                key,
+                lines: i..i + 1,
+            });
+        }
+    }
+    out
+}
+
+/// YAML de una sola propiedad, tal como lo escribiría serde.
+fn snippet(key: &str, value: &Value) -> Result<String, String> {
+    let mut one = Props::new();
+    one.insert(key.to_string(), value.clone());
+    serde_yaml_ng::to_string(&one).map_err(|e| format!("No se pudo escribir la propiedad: {e}"))
+}
+
+/// Edita solo las líneas de una propiedad y deja igual el resto del YAML
+/// (comentarios, orden, comillas...). `edit` recibe las líneas y devuelve
+/// las nuevas, o `None` si no sabe hacerlo.
+fn edit_lines(
+    content: &str,
+    edit: impl FnOnce(&[&str], &[Entry]) -> Option<Vec<String>>,
+) -> Option<String> {
+    let fm = find(content)?;
+    let lines: Vec<&str> = fm.yaml.lines().collect();
+    let new_lines = edit(&lines, &entries(&lines))?;
+    let yaml: String = new_lines.iter().map(|l| format!("{l}\n")).collect();
+    let body = &content[fm.body_start..];
+    if yaml.trim().is_empty() {
+        // Sin nada dentro, se quita el frontmatter entero.
+        return Some(body.trim_start_matches(['\n', '\r']).to_string());
+    }
+    Some(format!("---\n{yaml}---\n{body}"))
+}
+
+/// Comprueba que la edición línea a línea da exactamente lo esperado; si
+/// no, se reescribe todo el frontmatter (pierde comentarios, pero es seguro).
+fn checked(edited: Option<String>, expected: &Props, content: &str) -> Result<String, String> {
+    if let Some(out) = edited
+        && read(&out).ok().as_ref() == Some(expected)
+    {
+        return Ok(out);
+    }
+    write(content, expected)
+}
+
+/// Cambia una propiedad (`None` la quita) y devuelve la nota nueva. Solo se
+/// tocan las líneas de esa propiedad: los comentarios y el formato del resto
+/// del YAML se conservan.
+pub fn set(content: &str, key: &str, value: Option<Value>) -> Result<String, String> {
+    let mut expected = read(content)?;
+    match &value {
+        Some(v) => {
+            expected.insert(key.to_string(), v.clone());
+        }
+        None => {
+            expected.shift_remove(key);
+        }
+    }
+    let new_snippet = value.as_ref().map(|v| snippet(key, v)).transpose()?;
+
+    let edited = edit_lines(content, |lines, entries| {
+        let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        let replacement: Vec<String> = new_snippet
+            .as_deref()
+            .map(|s| s.lines().map(str::to_string).collect())
+            .unwrap_or_default();
+        match entries.iter().find(|e| e.key == key) {
+            Some(e) => {
+                out.splice(e.lines.clone(), replacement);
+            }
+            None if new_snippet.is_some() => out.extend(replacement),
+            None => {}
+        }
+        Some(out)
+    });
+    checked(edited, &expected, content)
+}
+
+/// Renombra una propiedad conservando su posición y el resto del YAML. Si
+/// no existe, no cambia nada.
 pub fn rename(content: &str, old: &str, new: &str) -> Result<Option<String>, String> {
     let props = read(content)?;
     if !props.contains_key(old) || old == new {
         return Ok(None);
     }
-    let renamed: Props = props
-        .into_iter()
-        .filter(|(k, _)| k != new)
+    let expected: Props = props
+        .iter()
+        .filter(|(k, _)| k.as_str() != new)
         .map(|(k, v)| {
-            if k == old {
-                (new.to_string(), v)
-            } else {
-                (k, v)
-            }
+            (
+                if k == old { new.to_string() } else { k.clone() },
+                v.clone(),
+            )
         })
         .collect();
-    write(content, &renamed).map(Some)
+    let new_key = snippet(new, &Value::Null)?;
+    let new_key = new_key
+        .trim_end()
+        .trim_end_matches("null")
+        .trim_end()
+        .trim_end_matches(':');
+
+    let edited = edit_lines(content, |lines, entries| {
+        // Si ya había otra con el nombre nuevo, mejor reescribir todo.
+        if entries.iter().any(|e| e.key == new) {
+            return None;
+        }
+        let e = entries.iter().find(|e| e.key == old)?;
+        let line = lines[e.lines.start];
+        let (_, rest) = line.split_once(':')?;
+        let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        out[e.lines.start] = format!("{new_key}:{rest}");
+        Some(out)
+    });
+    checked(edited, &expected, content).map(Some)
 }
 
 #[cfg(test)]
@@ -167,6 +274,36 @@ mod tests {
             ["estado", "importancia", "hecho", "fecha", "etiquetas"]
         );
         assert!(rename(NOTA, "no-existe", "x").unwrap().is_none());
+    }
+
+    #[test]
+    fn conserva_comentarios_y_formato() {
+        let nota = "---\n# Datos del proyecto\nestado: 'En curso'   # cambia a Hecho al terminar\netiquetas:\n  - casa\n  - taller\nfecha: 2026-10-20\n---\n\nTexto.\n";
+
+        let out = set(nota, "fecha", Some(json!("2026-11-01"))).unwrap();
+        assert!(out.contains("# Datos del proyecto\n"));
+        assert!(out.contains("estado: 'En curso'   # cambia a Hecho al terminar\n"));
+        assert!(out.contains("etiquetas:\n  - casa\n  - taller\n"));
+        assert_eq!(read(&out).unwrap()["fecha"], "2026-11-01");
+        assert!(out.ends_with("---\n\nTexto.\n"));
+
+        // Cambiar una lista de varias líneas sustituye todas sus líneas.
+        let out = set(&out, "etiquetas", Some(json!(["casa"]))).unwrap();
+        assert_eq!(read(&out).unwrap()["etiquetas"], json!(["casa"]));
+        assert!(!out.contains("taller"));
+        assert!(out.contains("# Datos del proyecto\n"));
+
+        // Añadir va al final; quitar borra solo sus líneas.
+        let out = set(&out, "nueva", Some(json!(true))).unwrap();
+        let out = set(&out, "estado", None).unwrap();
+        assert!(out.contains("# Datos del proyecto\n"));
+        assert!(!out.contains("estado"));
+        let keys: Vec<_> = read(&out).unwrap().keys().cloned().collect();
+        assert_eq!(keys, ["etiquetas", "fecha", "nueva"]);
+
+        let out = rename(&out, "fecha", "entrega").unwrap().unwrap();
+        assert!(out.contains("# Datos del proyecto\n"));
+        assert_eq!(read(&out).unwrap()["entrega"], "2026-11-01");
     }
 
     #[test]

@@ -87,7 +87,8 @@ export const wikiLinkSchema = $nodeSchema("wikilink", () => ({
       ...(node.attrs.alias ? { "data-alias": node.attrs.alias } : {}),
       title: node.attrs.target,
     },
-    node.attrs.alias || node.attrs.target,
+    // [[#Sección]] se ve como «Sección».
+    node.attrs.alias || String(node.attrs.target).replace(/^#/, ""),
   ],
   parseMarkdown: {
     match: (node) => node.type === "wikiLink",

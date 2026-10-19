@@ -25,14 +25,49 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 
 ### Comandos `/`
 
-Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Puedes seguir escribiendo para filtrar (por ejemplo `/fecha`).
+Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Puedes seguir escribiendo para filtrar, con o sin tildes (por ejemplo `/fecha` o `/titulo`).
 
 | Grupo | Comandos |
 |-------|----------|
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
-| Avanzado | Imagen, Código, Tabla, Fórmula |
-| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Propiedad, Base de datos, Plantilla, Fecha de hoy, Hora actual |
+| Avanzado | Código, Tabla, Fórmula |
+| Botion | Página (crea una nota y la enlaza), Imagen, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
+
+Todo se guarda con sintaxis compatible con Obsidian:
+
+| Función | Markdown |
+|---------|----------|
+| Aviso / desplegable | `> [!tip] Título` / `> [!note]- Título` |
+| Índice | lista de `[[#título]]` |
+| Resaltar | `==texto==` (también `Ctrl+Mayús+H` o el botón de la barra de formato) |
+| Incrustar nota | `![[nota]]` en una línea propia |
+| Vista de base de datos | `![[Carpeta/]]` (con barra final; solo Botion la dibuja) |
+| Diagrama | bloque de código `mermaid`, con vista previa |
+| Imagen | `![texto](adjuntos/foto.png)` |
+
+### Atajos
+
+| Atajo | Acción |
+|-------|--------|
+| `Ctrl+K` | Buscar notas |
+| `Ctrl+P` | Paleta de comandos |
+| `Ctrl+F` | Buscar en la nota (`Enter` / `Mayús+Enter` para moverse) |
+| `Ctrl+N` | Nueva nota |
+| `Ctrl+Mayús+H` | Resaltar |
+
+En macOS, `Cmd` en lugar de `Ctrl`.
+
+### Imágenes y exportar
+
+- Pega o arrastra una imagen en la nota (o usa `/Imagen`): se guarda en la carpeta `adjuntos/` de la bóveda y se enlaza con una ruta relativa.
+- «Exportar» (arriba a la derecha de la nota) o `/Exportar a…`:
+  - **HTML:** un único fichero con las imágenes y los diagramas dentro.
+  - **PDF:** abre el diálogo de imprimir; elige «Guardar como PDF».
+
+### Organizar
+
+- Arrastra notas o carpetas sobre otra carpeta para moverlas (o a una zona vacía para llevarlas a la raíz). Los enlaces se actualizan solos.
 
 ### Bases de datos
 
@@ -41,6 +76,7 @@ Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en b
 - Cada nota de la carpeta es una fila; sus propiedades son las columnas.
 - Tipos de columna: Texto, Número, Casilla, Fecha, Selección y Etiquetas.
 - Ordenar, filtrar, añadir, renombrar y eliminar propiedades desde la cabecera.
+- «Incluir subcarpetas» muestra también las notas de las carpetas de dentro.
 - Los datos están en el frontmatter de cada nota. La carpeta solo guarda la configuración de la vista en un fichero oculto `.botion-db.json`.
 
 Cada base de datos tiene tres vistas, y recuerda la última que usaste:
@@ -49,7 +85,7 @@ Cada base de datos tiene tres vistas, y recuerda la última que usaste:
 - **Kanban:** una columna por cada valor de una propiedad de selección; arrastra las tarjetas para cambiar el valor.
 - **Calendario:** las notas en el día de una propiedad de fecha; arrastra para cambiar la fecha o pulsa `+` en un día para crear una nota con esa fecha.
 
-Las notas muestran sus propiedades encima del texto y se pueden editar ahí también.
+Las notas muestran sus propiedades encima del texto y se pueden editar ahí también. Al editarlas se conservan los comentarios y el formato del resto del frontmatter.
 
 ### Plantillas
 
@@ -65,7 +101,15 @@ Opcional. Al pie de la barra lateral:
 2. Para sincronizar entre ordenadores, añade un remoto con Git (por ejemplo `git remote add origin git@github.com:tu-usuario/notas.git`).
 3. «Sincronizar» guarda los cambios, baja los del remoto y sube los tuyos. También puede hacerse solo cada 5 minutos.
 
-Usa el `git` instalado en tu sistema y sus credenciales (SSH o gestor de credenciales); Botion nunca pide contraseñas. Si dos ordenadores cambian la misma parte de una nota, avisa del conflicto sin perder nada: tus cambios quedan guardados en Git para resolverlo.
+Usa el `git` instalado en tu sistema y sus credenciales (SSH o gestor de credenciales); Botion nunca pide contraseñas.
+
+Si dos ordenadores cambian la misma parte de una nota, Botion pregunta qué hacer:
+
+- **Guardar las dos:** mantiene la tuya y guarda la otra como «nota (remoto).md».
+- **Quedarme con la mía** o **usar la del otro ordenador**.
+- **Decidir más tarde:** tus cambios quedan guardados en Git y no se pierde nada.
+
+Lo que no choca se une solo.
 
 ### Ejemplo de nota con propiedades
 
@@ -128,6 +172,19 @@ Contenido normal en Markdown...
 2. Crea y sube una etiqueta: `git tag v0.1.0 && git push origin v0.1.0`.
 3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
 4. Revisa el borrador y pulsa **Publish release**.
+
+### Firmar los instaladores (opcional)
+
+Sin firma, Windows (SmartScreen) y macOS (Gatekeeper) avisan la primera vez que se abre la app. Para quitar el aviso hace falta un certificado de pago; el workflow de versiones ya lo usa si se añaden estos secretos en **Settings → Secrets and variables → Actions**:
+
+1. **macOS** (cuenta de Apple Developer, 99 $/año):
+   - `APPLE_CERTIFICATE` (el `.p12` en base64) y `APPLE_CERTIFICATE_PASSWORD`.
+   - `APPLE_SIGNING_IDENTITY` (p. ej. `Developer ID Application: Tu Nombre (EQUIPO)`).
+   - Para notarizar: `APPLE_ID`, `APPLE_PASSWORD` (contraseña de app) y `APPLE_TEAM_ID`.
+2. **Windows** (certificado de firma de código de una autoridad reconocida):
+   - Configura `bundle.windows.certificateThumbprint` en `tauri.conf.json` o una firma en la nube; ver la [guía de Tauri](https://tauri.app/distribute/sign/windows/).
+
+Guía completa: [firmar con Tauri](https://tauri.app/distribute/sign/).
 
 ### Índice de búsqueda
 

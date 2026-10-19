@@ -237,8 +237,15 @@ pub fn open_vault(
         .map_err(|e| format!("No se pudo indexar la bóveda: {e}"))?;
     *state.index.lock().map_err(|_| "Índice bloqueado")? = Some(index);
 
-    let watcher = watch(app, root.clone(), vault.tree.clone(), state.index.clone());
+    let watcher = watch(
+        app.clone(),
+        root.clone(),
+        vault.tree.clone(),
+        state.index.clone(),
+    );
     *state.watcher.lock().map_err(|_| "Estado bloqueado")? = watcher;
+    // Deja que la interfaz muestre las imágenes de la bóveda.
+    let _ = app.asset_protocol_scope().allow_directory(&root, true);
     *state.root.lock().map_err(|_| "Estado bloqueado")? = Some(root);
     Ok(vault)
 }

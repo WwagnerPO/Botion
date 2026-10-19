@@ -36,6 +36,22 @@ pub struct SyncResult {
     pub pushed: bool,
     /// Notas que han cambiado al bajar cambios del remoto.
     pub changed: Vec<String>,
+    /// Notas que chocan con el remoto. Si hay alguna, no se ha bajado ni
+    /// subido nada: hay que elegir cómo resolverlo con [`resolve`].
+    pub conflicts: Vec<String>,
+}
+
+/// Cómo resolver un conflicto con el remoto.
+#[derive(Debug, Clone, Copy, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Strategy {
+    /// En las partes que chocan, gana la versión de este ordenador.
+    Mine,
+    /// En las partes que chocan, gana la versión del remoto.
+    Theirs,
+    /// Como `Mine`, pero guarda la versión del remoto en una copia
+    /// «nota (remoto).md» junto a cada nota en conflicto.
+    Both,
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<Output, String> {
@@ -209,43 +225,108 @@ pub fn sync(root: &Path) -> Result<SyncResult, String> {
         let mut args = identity_args(root);
         args.extend(["pull", "--rebase", "--quiet"]);
         if let Err(e) = git_ok(root, &args) {
-            let conflicts =
-                git_ok(root, &["diff", "--name-only", "--diff-filter=U"]).unwrap_or_default();
-            let _ = git(root, &["rebase", "--abort"]);
-            if !conflicts.is_empty() {
-                let files: Vec<&str> = conflicts.lines().collect();
-                return Err(format!(
-                    "Conflicto con los cambios del remoto en: {}. Tus cambios están guardados \
-                     en Git; resuelve el conflicto con Git y vuelve a sincronizar.",
-                    files.join(", ")
-                ));
-            }
-            return Err(format!("No se pudieron bajar los cambios: {e}"));
-        }
-        let after = git_ok(root, &["rev-parse", "HEAD"])?;
-        if before != after {
-            result.changed = git_ok(
+            let conflicts = git_ok(
                 root,
-                &["diff", "--name-only", "--relative", &before, &after],
-            )?
+                &["diff", "--name-only", "--relative", "--diff-filter=U"],
+            )
+            .unwrap_or_default();
+            let _ = git(root, &["rebase", "--abort"]);
+            if conflicts.is_empty() {
+                return Err(format!("No se pudieron bajar los cambios: {e}"));
+            }
+            // Los cambios locales siguen guardados en Git; se elige después.
+            result.conflicts = conflicts.lines().map(str::to_string).collect();
+            return Ok(result);
+        }
+        record_changes(root, &before, &mut result)?;
+    }
+    push(root, &remote, &mut result)?;
+    Ok(result)
+}
+
+/// Apunta qué ha llegado del remoto entre `before` y el commit actual.
+fn record_changes(root: &Path, before: &str, result: &mut SyncResult) -> Result<(), String> {
+    let after = git_ok(root, &["rev-parse", "HEAD"])?;
+    if before != after {
+        result.changed = git_ok(root, &["diff", "--name-only", "--relative", before, &after])?
             .lines()
             .map(str::to_string)
             .collect();
-            // Si solo se reaplicaron nuestros commits, no ha llegado nada.
-            result.pulled = !result.changed.is_empty();
-        }
+        // Si solo se reaplicaron nuestros commits, no ha llegado nada.
+        result.pulled = !result.changed.is_empty();
     }
+    Ok(())
+}
 
+fn push(root: &Path, remote: &str, result: &mut SyncResult) -> Result<(), String> {
     let st = status(root);
     if st.ahead > 0 || !has_upstream(root) {
-        let push = if has_upstream(root) {
+        let out = if has_upstream(root) {
             git_ok(root, &["push", "--quiet"])
         } else {
-            git_ok(root, &["push", "--quiet", "-u", &remote, "HEAD"])
+            git_ok(root, &["push", "--quiet", "-u", remote, "HEAD"])
         };
-        push.map_err(|e| format!("No se pudieron subir los cambios: {e}"))?;
+        out.map_err(|e| format!("No se pudieron subir los cambios: {e}"))?;
         result.pushed = true;
     }
+    Ok(())
+}
+
+/// «Proyectos/Ideas.md» → «Proyectos/Ideas (remoto).md», sin pisar nada.
+fn copy_name(root: &Path, path: &str) -> String {
+    let (base, ext) = path.rsplit_once('.').unwrap_or((path, "md"));
+    let mut candidate = format!("{base} (remoto).{ext}");
+    let mut n = 2;
+    while root.join(&candidate).exists() {
+        candidate = format!("{base} (remoto {n}).{ext}");
+        n += 1;
+    }
+    candidate
+}
+
+/// Resuelve un conflicto de [`sync`] uniendo los cambios del remoto con los
+/// locales; en las partes que chocan decide `strategy`. Después sube.
+pub fn resolve(root: &Path, strategy: Strategy) -> Result<SyncResult, String> {
+    let remote = first_remote(root).ok_or("La bóveda no tiene remoto")?;
+    let mut result = SyncResult {
+        committed: commit_all(root, "Botion: guardar cambios")?,
+        ..Default::default()
+    };
+    git_ok(root, &["fetch", "--quiet"]).map_err(|e| format!("No se pudo bajar: {e}"))?;
+
+    if strategy == Strategy::Both {
+        // Qué notas chocarían: las cambiadas a los dos lados.
+        let base = git_ok(root, &["merge-base", "HEAD", "@{upstream}"])?;
+        let mine = git_ok(root, &["diff", "--name-only", "--relative", &base, "HEAD"])?;
+        let theirs = git_ok(
+            root,
+            &["diff", "--name-only", "--relative", &base, "@{upstream}"],
+        )?;
+        let theirs: Vec<&str> = theirs.lines().collect();
+        for path in mine.lines().filter(|p| theirs.contains(p)) {
+            if let Ok(content) = git_ok(root, &["show", &format!("@{{upstream}}:./{path}")]) {
+                let copy = copy_name(root, path);
+                fs::write(root.join(&copy), content + "\n")
+                    .map_err(|e| format!("No se pudo guardar la copia del remoto: {e}"))?;
+            }
+        }
+        commit_all(root, "Botion: copia de la versión del remoto")?;
+    }
+
+    let before = git_ok(root, &["rev-parse", "HEAD"])?;
+    let side = if strategy == Strategy::Theirs {
+        "theirs"
+    } else {
+        "ours"
+    };
+    let mut args = identity_args(root);
+    args.extend(["merge", "--quiet", "--no-edit", "-X", side, "@{upstream}"]);
+    if let Err(e) = git_ok(root, &args) {
+        let _ = git(root, &["merge", "--abort"]);
+        return Err(format!("No se pudo unir con el remoto: {e}"));
+    }
+    record_changes(root, &before, &mut result)?;
+    push(root, &remote, &mut result)?;
     Ok(result)
 }
 
@@ -259,6 +340,17 @@ pub fn git_init(state: tauri::State<'_, VaultState>) -> Result<GitStatus, String
     let root = vault::current_root(&state)?;
     init(&root)?;
     Ok(status(&root))
+}
+
+#[tauri::command(async)]
+pub fn git_resolve(
+    strategy: Strategy,
+    state: tauri::State<'_, VaultState>,
+) -> Result<SyncResult, String> {
+    let root = vault::current_root(&state)?;
+    let result = resolve(&root, strategy)?;
+    vault::sync_index(&state)?;
+    Ok(result)
 }
 
 #[tauri::command(async)]
@@ -381,18 +473,23 @@ mod tests {
         assert!(a.join("DesdeB.md").exists());
     }
 
-    #[test]
-    fn conflicto_avisa_y_no_pierde_nada() {
-        let (_dir, a, b) = setup();
+    /// Las dos copias cambian la misma línea de Ideas.md; devuelve la copia
+    /// B ya con el conflicto detectado.
+    fn conflicto() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let (dir, a, b) = setup();
         fs::write(a.join("Ideas.md"), "# Ideas\n\nDesde A\n").unwrap();
+        fs::write(a.join("SoloA.md"), "a").unwrap();
         sync(&a).unwrap();
         fs::write(b.join("Ideas.md"), "# Ideas\n\nDesde B\n").unwrap();
+        (dir, a, b)
+    }
 
-        let err = sync(&b).unwrap_err();
-        assert!(
-            err.contains("Conflicto") && err.contains("Ideas.md"),
-            "{err}"
-        );
+    #[test]
+    fn conflicto_avisa_y_no_pierde_nada() {
+        let (_dir, _a, b) = conflicto();
+        let r = sync(&b).unwrap();
+        assert_eq!(r.conflicts, ["Ideas.md"]);
+        assert!(!r.pushed);
         // El cambio local sigue en el fichero y guardado en Git.
         assert_eq!(
             fs::read_to_string(b.join("Ideas.md")).unwrap(),
@@ -401,6 +498,53 @@ mod tests {
         let st = status(&b);
         assert_eq!(st.changes, 0);
         assert_eq!((st.ahead, st.behind), (1, 1));
+    }
+
+    #[test]
+    fn resolver_con_la_mia() {
+        let (_dir, a, b) = conflicto();
+        sync(&b).unwrap();
+        let r = resolve(&b, Strategy::Mine).unwrap();
+        assert!(r.pushed && r.changed.contains(&"SoloA.md".to_string()));
+        assert_eq!(
+            fs::read_to_string(b.join("Ideas.md")).unwrap(),
+            "# Ideas\n\nDesde B\n"
+        );
+        assert!(b.join("SoloA.md").exists());
+        // La otra copia recibe la versión elegida.
+        sync(&a).unwrap();
+        assert_eq!(
+            fs::read_to_string(a.join("Ideas.md")).unwrap(),
+            "# Ideas\n\nDesde B\n"
+        );
+    }
+
+    #[test]
+    fn resolver_con_la_del_remoto() {
+        let (_dir, _a, b) = conflicto();
+        sync(&b).unwrap();
+        resolve(&b, Strategy::Theirs).unwrap();
+        assert_eq!(
+            fs::read_to_string(b.join("Ideas.md")).unwrap(),
+            "# Ideas\n\nDesde A\n"
+        );
+        assert_eq!(status(&b).ahead, 0);
+    }
+
+    #[test]
+    fn resolver_guardando_las_dos() {
+        let (_dir, _a, b) = conflicto();
+        sync(&b).unwrap();
+        resolve(&b, Strategy::Both).unwrap();
+        assert_eq!(
+            fs::read_to_string(b.join("Ideas.md")).unwrap(),
+            "# Ideas\n\nDesde B\n"
+        );
+        assert_eq!(
+            fs::read_to_string(b.join("Ideas (remoto).md")).unwrap(),
+            "# Ideas\n\nDesde A\n"
+        );
+        assert_eq!(status(&b).changes, 0);
     }
 
     #[test]

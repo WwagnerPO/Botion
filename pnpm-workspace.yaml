@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@milkdown/crepe@7.22.3': patches/@milkdown__crepe@7.22.3.patch

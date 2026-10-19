@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { applyTheme, getTheme, type Theme } from "../lib/theme";
 
 const OPTIONS: { value: Theme; label: string }[] = [
@@ -9,6 +9,12 @@ const OPTIONS: { value: Theme; label: string }[] = [
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getTheme);
+  // Por si se cambia desde la paleta de comandos.
+  useEffect(() => {
+    const onTheme = (e: Event) => setTheme((e as CustomEvent<Theme>).detail);
+    window.addEventListener("botion-theme", onTheme);
+    return () => window.removeEventListener("botion-theme", onTheme);
+  }, []);
 
   function choose(value: Theme) {
     setTheme(value);
