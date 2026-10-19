@@ -18,7 +18,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - Enlaces entre notas `[[nota]]` y backlinks.
 - Búsqueda rápida en todas las notas (`Ctrl+K`), sin distinguir tildes.
 - Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
-- Vistas de tabla, kanban y calendario.
+- Vistas de tabla, kanban, calendario, galería, lista y cronograma, con filtros, fórmulas y relaciones.
 - Plantillas.
 - Tema claro, oscuro o el del sistema.
 - Sincronización opcional con Git.
@@ -83,19 +83,48 @@ Pasa el ratón sobre la cabecera de la nota y pulsa «Añadir icono» o «Añadi
 
 ### Bases de datos
 
-Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en base de datos», o `/Base de datos` desde una nota). Se abre como una tabla:
+Cualquier carpeta puede ser una base de datos (clic derecho → «Convertir en base de datos», o `/Base de datos` desde una nota):
 
-- Cada nota de la carpeta es una fila; sus propiedades son las columnas.
-- Tipos de columna: Texto, Número, Casilla, Fecha, Selección y Etiquetas.
-- Ordenar, filtrar, añadir, renombrar y eliminar propiedades desde la cabecera.
-- «Incluir subcarpetas» muestra también las notas de las carpetas de dentro.
-- Los datos están en el frontmatter de cada nota. La carpeta solo guarda la configuración de la vista en un fichero oculto `.botion-db.json`.
+- Cada nota de la carpeta es una fila; sus propiedades (frontmatter) son las columnas.
+- Los datos están en las notas. La carpeta solo guarda la configuración en un fichero oculto `.botion-db.json`.
+- Pulsa el nombre de una fila para abrirla en un **panel lateral** (propiedades editables y texto de la nota) o «Abrir» para ir a la página.
 
-Cada base de datos tiene tres vistas, y recuerda la última que usaste:
+#### Vistas
 
-- **Tabla:** edición directa de cada celda.
-- **Kanban:** una columna por cada valor de una propiedad de selección; arrastra las tarjetas para cambiar el valor.
-- **Calendario:** las notas en el día de una propiedad de fecha; arrastra para cambiar la fecha o pulsa `+` en un día para crear una nota con esa fecha.
+Cada base de datos puede tener varias vistas guardadas (pestañas encima de la tabla), cada una con sus filtros, orden, grupos y columnas visibles. Pulsa la pestaña activa para renombrarla, cambiar su tipo, duplicarla o eliminarla.
+
+| Vista | Qué muestra |
+|-------|-------------|
+| Tabla | Edición directa de cada celda, grupos plegables y totales al pie |
+| Kanban | Una columna por valor de una propiedad; arrastra para cambiarlo |
+| Calendario | Las notas en el día de una fecha; arrastra para moverlas |
+| Galería | Tarjetas con la portada o el icono de cada nota |
+| Lista | Una línea por nota con sus propiedades a la derecha |
+| Cronograma | Barras entre una fecha de inicio y otra de fin; arrastra la barra o su borde |
+
+En la barra de la vista:
+
+- **Filtro:** condiciones por propiedad («estado es Hecho», «precio > 10», «fecha en la próxima semana»…). Se cumplen todas a la vez.
+- **Ordenar** y **Agrupar** por cualquier propiedad.
+- **Propiedades:** mostrar u ocultar columnas en esta vista, e «Incluir subcarpetas».
+- En la tabla, arrastra el borde de una cabecera para cambiar el ancho y la cabecera entera para reordenar. Pulsa el pie de una columna para elegir un total (contar, suma, media, mediana, mínimo, máximo, % marcadas…).
+
+#### Tipos de propiedad
+
+Texto, Número, Casilla, Fecha, Selección, Etiquetas, URL, Email, Teléfono, Archivos (adjuntos en `adjuntos/`), Relación, Rollup, Fórmula, Fecha de creación y Última edición. Pulsa la cabecera de una columna para cambiar su nombre o su tipo.
+
+- **Relación:** enlaza filas de otra base de datos. Se guarda como en Obsidian: `proyectos: ["[[Web]]", "[[App]]"]`.
+- **Rollup:** resume una propiedad de las filas relacionadas (contar, suma, media, mínimo, máximo, fechas…).
+- **Fórmula:** se calcula para cada fila y no se guarda en las notas. Ejemplos:
+
+  ```text
+  prop("precio") * prop("cantidad")
+  if(prop("hecha"), "✅", "⏳")
+  dateBetween(prop("fin"), today(), "days")
+  concat(upper(prop("estado")), " · ", formatDate(prop("fecha")))
+  ```
+
+  Funciones: `if`, `and`, `or`, `not`, `empty`, `length`, `concat`, `join`, `contains`, `lower`, `upper`, `trim`, `replace`, `replaceAll`, `substring`, `format`, `toNumber`, `round`, `floor`, `ceil`, `abs`, `sqrt`, `pow`, `min`, `max`, `sum`, `average`, `now`, `today`, `dateAdd`, `dateSubtract`, `dateBetween`, `formatDate`, `year`, `month`, `day`, `weekday`. Operadores: `+ - * / %`, `== != < <= > >=`, `and`/`&&`, `or`/`||`, `not`/`!`.
 
 Las notas muestran sus propiedades encima del texto y se pueden editar ahí también. Al editarlas se conservan los comentarios y el formato del resto del frontmatter.
 
@@ -171,14 +200,14 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 
 **Bases de datos**
 
-- [ ] Vistas de galería, lista y cronograma.
-- [ ] Varias vistas guardadas por base de datos, cada una con sus filtros.
-- [ ] Filtros por propiedad («estado es Hecho») y agrupar en la tabla.
-- [ ] Fórmulas, relaciones entre bases de datos y rollups.
-- [ ] Más tipos de propiedad: URL, email, teléfono, archivos, fecha de creación y de edición.
-- [ ] Abrir una fila en un panel lateral sin salir de la tabla.
-- [ ] Columnas: cambiar ancho, reordenar y ocultar.
-- [ ] Totales al pie (contar, sumar, media).
+- [x] Vistas de galería, lista y cronograma.
+- [x] Varias vistas guardadas por base de datos, cada una con sus filtros.
+- [x] Filtros por propiedad («estado es Hecho») y agrupar en la tabla.
+- [x] Fórmulas, relaciones entre bases de datos y rollups.
+- [x] Más tipos de propiedad: URL, email, teléfono, archivos, fecha de creación y de edición.
+- [x] Abrir una fila en un panel lateral sin salir de la tabla.
+- [x] Columnas: cambiar ancho, reordenar y ocultar.
+- [x] Totales al pie (contar, sumar, media).
 
 **Editor y navegación**
 

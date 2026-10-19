@@ -15,7 +15,7 @@ export async function saveAttachment(notePath: string, file: File): Promise<stri
 }
 
 /** Une rutas con «/» resolviendo «..» y «.». */
-function joinPath(...parts: string[]) {
+export function joinPath(...parts: string[]) {
   const out: string[] = [];
   for (const part of parts.join("/").split(/[\\/]+/)) {
     if (part === "..") out.pop();
@@ -103,4 +103,10 @@ export function youtubeId(url: string) {
       url,
     );
   return m?.[1] ?? null;
+}
+
+/** Ruta en la bóveda de un enlace relativo guardado en una nota. */
+export function fromNote(notePath: string, link: string) {
+  if (/^[a-z]+:/i.test(link)) return link;
+  return joinPath(notePath.split("/").slice(0, -1).join("/"), decodeURI(link));
 }

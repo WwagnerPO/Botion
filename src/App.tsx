@@ -116,6 +116,7 @@ export default function App() {
   /** Tipos y valores de la base de datos de la nota abierta, si está en una. */
   const [propKinds, setPropKinds] = useState<Record<string, Kind>>({});
   const [propOptions, setPropOptions] = useState<Record<string, string[]>>({});
+  const [propRelations, setPropRelations] = useState<Record<string, string>>({});
   /** Carpeta de base de datos abierta (en lugar de una nota). */
   const [database, setDatabase] = useState<string | null>(null);
   /** Sube para que la tabla abierta se vuelva a leer del disco. */
@@ -314,12 +315,16 @@ export default function App() {
     if (!folder || !isDatabase(vault?.tree ?? [])) {
       setPropKinds({});
       setPropOptions({});
+      setPropRelations({});
       return;
     }
     try {
       const db = await getDatabase(folder);
       setPropKinds(Object.fromEntries(db.columns.map((c) => [c.name, c.kind])));
       setPropOptions(columnOptions(db));
+      setPropRelations(
+        Object.fromEntries(db.columns.filter((c) => c.relation).map((c) => [c.name, c.relation!])),
+      );
     } catch {
       setPropKinds({});
       setPropOptions({});
@@ -948,6 +953,8 @@ export default function App() {
                 props={visibleProps}
                 kinds={propKinds}
                 options={propOptions}
+                relations={propRelations}
+                onOpenLink={handleOpenLink}
                 onChange={changeProperty}
                 onRemove={(key) => changeProperty(key, null)}
                 onAdd={addProperty}
@@ -1006,10 +1013,19 @@ export default function App() {
             path={database}
             reloadKey={dbReloadKey}
             onOpenNote={(path) => openNote(path)}
+            onOpenLink={(target) =>
+              run(async () => {
+                // Relaciones: se buscan como los enlaces de una nota de la carpeta.
+                const path = await resolveNoteLink(target, `${database}/_.md`);
+                if (path) await openNote(path);
+                else setError(`No existe la nota «${target}»`);
+              })
+            }
             onNewRow={newRow}
             onError={showError}
-            showMenu={showMenu}
             showDialog={setDialog}
+            databases={listDatabases()}
+            vaultRoot={vault?.root ?? ""}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center">

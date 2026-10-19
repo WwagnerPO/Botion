@@ -1,83 +1,72 @@
-import {
-  CalendarDays,
-  KanbanSquare,
-  Plus,
-  Search,
-  Table2,
-  Type,
-} from "lucide-react";
+import { Plus, Search, Table2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { COVER_KEY, ICON_KEY } from "../lib/cover";
 import {
-  KIND_LABELS,
+  activeView,
   columnOptions,
-  compareValues,
+  configOf,
   deleteDatabaseProperty,
   getDatabase,
+  newView,
   renameDatabaseProperty,
   saveDatabaseConfig,
   setProperty,
-  valueText,
   type Column,
   type Config,
   type Database,
-  type Kind,
+  type Filter,
   type PropValue,
   type Props as PropMap,
-  type View,
+  type ViewConfig,
 } from "../lib/database";
+import { viewRows, type Ctx, type Related } from "../lib/dbview";
 import { BoardView } from "./BoardView";
 import { CalendarView } from "./CalendarView";
-import type { MenuItem } from "./ContextMenu";
+import { GalleryView, ListView } from "./CardViews";
+import { ColumnMenu } from "./ColumnMenu";
 import type { DialogRequest } from "./Dialog";
-import { KIND_ICONS } from "./kindIcons";
-import { PropertyInput } from "./PropertyInput";
+import { PeekPanel } from "./PeekPanel";
+import { TableView } from "./TableView";
+import { TimelineView } from "./TimelineView";
+import { FilterBar, ViewTabs, ViewToolbar } from "./ViewControls";
+import type { ViewProps } from "./viewProps";
 
 interface Props {
   path: string;
   /** Cambia cuando algo de fuera puede haber modificado las notas. */
   reloadKey: number;
   onOpenNote: (path: string) => void;
+  /** Abre el destino de un enlace `[[…]]`. */
+  onOpenLink: (target: string) => void;
   /** Nueva nota en la base de datos, con propiedades ya puestas. */
   onNewRow: (folder: string, preset?: PropMap) => void;
   onError: (message: string) => void;
-  showMenu: (x: number, y: number, items: MenuItem[]) => void;
   showDialog: (request: DialogRequest) => void;
+  /** Bases de datos de la bóveda, para las relaciones. */
+  databases: { path: string; name: string }[];
+  vaultRoot: string;
 }
-
-const KINDS = Object.keys(KIND_LABELS) as Kind[];
-
-const VIEWS = [
-  { value: "table", label: "Tabla", Icon: Table2 },
-  { value: "board", label: "Kanban", Icon: KanbanSquare },
-  { value: "calendar", label: "Calendario", Icon: CalendarDays },
-] as const satisfies readonly { value: View; label: string; Icon: unknown }[];
 
 /** Propiedades de la cabecera de la nota: no son columnas. */
 const PAGE_KEYS = new Set([ICON_KEY, COVER_KEY]);
-
-function configOf(db: Database): Config {
-  return {
-    columns: db.columns,
-    sort: db.sort,
-    view: db.view,
-    group_by: db.group_by,
-    date_by: db.date_by,
-    subfolders: db.subfolders,
-  };
-}
 
 export function DatabaseView({
   path,
   reloadKey,
   onOpenNote,
+  onOpenLink,
   onNewRow,
   onError,
-  showMenu,
   showDialog,
+  databases,
+  vaultRoot,
 }: Props) {
   const [db, setDb] = useState<Database | null>(null);
-  const [filter, setFilter] = useState("");
+  const [related, setRelated] = useState<Related>({});
+  const [search, setSearch] = useState("");
+  const [peek, setPeek] = useState<string | null>(null);
+  const [columnMenu, setColumnMenu] = useState<{ column: Column | null; anchor: HTMLElement } | null>(null);
+  const [newFilter, setNewFilter] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -98,63 +87,50 @@ export function DatabaseView({
     return () => window.removeEventListener("focus", reload);
   }, [reload]);
 
-  const rows = useMemo(() => {
-    if (!db) return [];
-    const q = filter.trim().toLowerCase();
-    let result = q
-      ? db.rows.filter(
-          (r) =>
-            r.name.toLowerCase().includes(q) ||
-            Object.values(r.props).some((v) =>
-              valueText(v).toLowerCase().includes(q),
-            ),
-        )
-      : db.rows;
-    const sort = db.sort;
-    if (sort) {
-      result = [...result].sort((a, b) =>
-        sort.column === ""
-          ? compareValues(a.name, b.name, sort.desc)
-          : compareValues(
-              a.props[sort.column],
-              b.props[sort.column],
-              sort.desc,
-            ),
-      );
-    }
-    return result;
-  }, [db, filter]);
+  // Bases de datos de las relaciones, para los rollups.
+  const targets = useMemo(
+    () => [...new Set((db?.columns ?? []).map((c) => c.relation).filter((t): t is string => !!t))].sort().join("\n"),
+    [db?.columns],
+  );
+  useEffect(() => {
+    let current = true;
+    const list = targets ? targets.split("\n") : [];
+    Promise.all(list.map((t) => getDatabase(t).then((d) => [t, d] as const).catch(() => [t, undefined] as const))).then(
+      (pairs) => current && setRelated(Object.fromEntries(pairs)),
+    );
+    return () => {
+      current = false;
+    };
+  }, [targets, reloadKey]);
 
-  if (!db) return null;
+  const ctx: Ctx | null = useMemo(() => (db ? { db, related } : null), [db, related]);
+  const view = db ? activeView(db) : null;
+  const rows = useMemo(() => (view && ctx ? viewRows(view, ctx, search) : []), [view, ctx, search]);
+
+  if (!db || !view || !ctx) return null;
   const database = db;
-
   const options = columnOptions(database);
+  const columns = database.columns.filter((c) => !view.hidden.includes(c.name));
 
-  async function saveConfig(patch: Partial<Config>) {
-    const next = { ...database, ...patch };
-    setDb(next);
+  async function saveConfig(next: Config, reloadAfter = false) {
+    setDb({ ...database, ...next });
     try {
-      await saveDatabaseConfig(database.path, configOf(next));
-      // Cambiar las subcarpetas cambia qué filas hay.
-      if ("subfolders" in patch) await reload();
+      await saveDatabaseConfig(database.path, configOf({ ...database, ...next }));
+      if (reloadAfter) await reload();
     } catch (e) {
       onError(String(e));
     }
   }
 
-  async function changeValue(
-    rowPath: string,
-    column: string,
-    value: PropValue,
-  ) {
+  const updateView = (id: string, patch: Partial<ViewConfig>) =>
+    saveConfig({ ...database, views: database.views.map((v) => (v.id === id ? { ...v, ...patch } : v)) });
+  const updateCurrent = (patch: Partial<ViewConfig>) => updateView(view.id, patch);
+
+  async function changeValue(rowPath: string, column: string, value: PropValue) {
     // Se ve el cambio al momento; si falla, se recarga lo que hay en disco.
     setDb({
       ...database,
-      rows: database.rows.map((r) =>
-        r.path === rowPath
-          ? { ...r, props: { ...r.props, [column]: value } }
-          : r,
-      ),
+      rows: database.rows.map((r) => (r.path === rowPath ? { ...r, props: { ...r.props, [column]: value } } : r)),
     });
     try {
       await setProperty(rowPath, column, value);
@@ -172,104 +148,76 @@ export function DatabaseView({
       initial: "",
       confirm: "Añadir",
       onConfirm: (name) => {
-        if (database.columns.some((c) => c.name === name)) {
+        if (database.columns.some((c) => c.name === name) || PAGE_KEYS.has(name)) {
           onError(`Ya existe la propiedad «${name}»`);
           return;
         }
-        return saveConfig({
-          columns: [...database.columns, { name, kind: "text" }],
-        });
+        return saveConfig({ ...database, columns: [...database.columns, { name, kind: "text" }] });
       },
     });
   }
 
-  function columnMenu(column: Column | null, e: React.MouseEvent) {
-    const name = column?.name ?? "";
-    const sortBy = (desc: boolean) => () =>
-      saveConfig({ sort: { column: name, desc } });
-    const items: MenuItem[] = [
-      { label: "Orden ascendente", onSelect: sortBy(false) },
-      { label: "Orden descendente", onSelect: sortBy(true) },
-    ];
-    if (database.sort) {
-      items.push({
-        label: "Quitar orden",
-        onSelect: () => saveConfig({ sort: null }),
-      });
-    }
-    if (column) {
-      items.push(
-        ...KINDS.map((kind) => ({
-          label: `${kind === column.kind ? "✓ " : ""}Tipo: ${KIND_LABELS[kind]}`,
-          onSelect: () =>
-            saveConfig({
-              columns: database.columns.map((c) =>
-                c.name === column.name ? { ...c, kind } : c,
-              ),
-            }),
-        })),
-        {
-          label: "Renombrar",
-          onSelect: () =>
-            showDialog({
-              kind: "prompt",
-              title: "Renombrar propiedad",
-              label: "Nuevo nombre",
-              initial: column.name,
-              confirm: "Renombrar",
-              onConfirm: async (newName) => {
-                try {
-                  // La columna puede no estar guardada aún (deducida de las notas).
-                  await saveDatabaseConfig(database.path, configOf(database));
-                  await renameDatabaseProperty(
-                    database.path,
-                    column.name,
-                    newName,
-                  );
-                } catch (err) {
-                  onError(String(err));
-                }
-                await reload();
-              },
-            }),
-        },
-        {
-          label: "Eliminar",
-          danger: true,
-          onSelect: () =>
-            showDialog({
-              kind: "confirm",
-              title: "Eliminar propiedad",
-              message: `Se quitará «${column.name}» de todas las notas de «${database.name}».`,
-              confirm: "Eliminar",
-              danger: true,
-              onConfirm: async () => {
-                try {
-                  await deleteDatabaseProperty(database.path, column.name);
-                } catch (err) {
-                  onError(String(err));
-                }
-                await reload();
-              },
-            }),
-        },
-      );
-    }
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    showMenu(rect.left, rect.bottom + 4, items);
+  function addFilter(column: string) {
+    const filters: Filter[] = [...view!.filters, { column, op: "contains", value: "" }];
+    setNewFilter(filters.length - 1);
+    updateCurrent({ filters });
   }
 
-  function sortMark(column: string) {
-    if (database.sort?.column !== column) return null;
-    return (
-      <span className="text-neutral-400">
-        {database.sort.desc ? " ↓" : " ↑"}
-      </span>
-    );
+  async function renameColumn(column: Column, newName: string) {
+    try {
+      // La columna puede no estar guardada aún (deducida de las notas).
+      await saveDatabaseConfig(database.path, configOf(database));
+      await renameDatabaseProperty(database.path, column.name, newName);
+    } catch (err) {
+      onError(String(err));
+    }
+    await reload();
   }
 
-  const headerButton =
-    "flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[13px] font-normal text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800";
+  function deleteColumn(column: Column) {
+    showDialog({
+      kind: "confirm",
+      title: "Eliminar propiedad",
+      message: `Se quitará «${column.name}» de todas las notas de «${database.name}».`,
+      confirm: "Eliminar",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await saveDatabaseConfig(database.path, configOf(database));
+          await deleteDatabaseProperty(database.path, column.name);
+        } catch (err) {
+          onError(String(err));
+        }
+        await reload();
+      },
+    });
+  }
+
+  function reorder(name: string, before: string | null) {
+    const moving = database.columns.find((c) => c.name === name);
+    if (!moving) return;
+    const rest = database.columns.filter((c) => c.name !== name);
+    const at = before === null ? rest.length : rest.findIndex((c) => c.name === before);
+    rest.splice(at < 0 ? rest.length : at, 0, moving);
+    saveConfig({ ...database, columns: rest });
+  }
+
+  const props: ViewProps = {
+    db: database,
+    view,
+    rows,
+    ctx,
+    columns,
+    options,
+    vaultRoot,
+    onOpenNote,
+    onOpenLink,
+    onPeek: setPeek,
+    onChangeValue: changeValue,
+    onNewRow: (preset) => onNewRow(database.path, preset),
+    onUpdateView: updateCurrent,
+  };
+  const peekRow = peek ? database.rows.find((r) => r.path === peek) : undefined;
 
   return (
     <div className="flex-1 overflow-auto">
@@ -282,185 +230,120 @@ export function DatabaseView({
           {database.name}
         </h1>
 
-        <div
-          role="tablist"
-          aria-label="Vista"
-          className="mb-4 flex gap-1 border-b border-neutral-200 dark:border-neutral-800"
-        >
-          {VIEWS.map((v) => (
+        <ViewTabs
+          db={database}
+          active={view}
+          onActivate={(id) => saveConfig({ ...database, active_view: id })}
+          onAdd={(kind) => {
+            const v = newView(kind);
+            saveConfig({ ...database, views: [...database.views, v], active_view: v.id });
+          }}
+          onUpdate={updateView}
+          onDuplicate={(id) => {
+            const src = database.views.find((v) => v.id === id)!;
+            const copy = { ...structuredClone(src), id: newView(src.kind).id, name: `${src.name} (copia)` };
+            saveConfig({ ...database, views: [...database.views, copy], active_view: copy.id });
+          }}
+          onDelete={(id) => {
+            const views = database.views.filter((v) => v.id !== id);
+            saveConfig({ ...database, views, active_view: views[0].id });
+          }}
+        />
+
+        <div className="mb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <ViewToolbar
+              db={database}
+              view={view}
+              onUpdate={updateCurrent}
+              onAddFilter={addFilter}
+              onSubfolders={(subfolders) => saveConfig({ ...database, subfolders }, true)}
+            />
+            <label className="ml-auto flex w-48 items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-sm focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-400/20 dark:border-neutral-700">
+              <Search className="size-3.5 shrink-0 text-neutral-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar…"
+                aria-label="Buscar en la base de datos"
+                className="w-full bg-transparent outline-none placeholder:text-neutral-400"
+              />
+            </label>
+            <span className="text-xs text-neutral-400">
+              {rows.length} de {database.rows.length}
+            </span>
             <button
-              key={v.value}
               type="button"
-              role="tab"
-              aria-selected={database.view === v.value}
-              onClick={() => saveConfig({ view: v.value })}
-              className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-1.5 text-sm ${
-                database.view === v.value
-                  ? "border-neutral-800 font-medium text-neutral-900 dark:border-neutral-200 dark:text-neutral-50"
-                  : "border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-              }`}
+              onClick={() => onNewRow(database.path)}
+              className="flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
             >
-              <v.Icon className="size-4" />
-              {v.label}
+              <Plus className="size-4" />
+              Nueva
             </button>
-          ))}
-        </div>
-
-        <div className="mb-3 flex items-center gap-2">
-          <label className="flex w-56 items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-sm focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-400/20 dark:border-neutral-700">
-            <Search className="size-3.5 shrink-0 text-neutral-400" />
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filtrar…"
-              className="w-full bg-transparent outline-none placeholder:text-neutral-400"
-            />
-          </label>
-          <span className="text-xs text-neutral-400">
-            {rows.length} de {database.rows.length}
-          </span>
-          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
-            <input
-              type="checkbox"
-              checked={database.subfolders}
-              onChange={(e) => saveConfig({ subfolders: e.target.checked })}
-              className="accent-violet-600"
-            />
-            Incluir subcarpetas
-          </label>
-          <button
-            type="button"
-            onClick={() => onNewRow(database.path)}
-            className="ml-auto flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
-          >
-            <Plus className="size-4" />
-            Nueva
-          </button>
-        </div>
-
-        {database.view === "board" && (
-          <BoardView
+          </div>
+          <FilterBar
             db={database}
-            rows={rows}
+            view={view}
             options={options}
-            onOpenNote={onOpenNote}
-            onChangeValue={changeValue}
-            onNewRow={(preset) => onNewRow(database.path, preset)}
-            onGroupBy={(group_by) => saveConfig({ group_by })}
+            onChange={(filters) => updateCurrent({ filters })}
+            openIndex={newFilter}
+            onOpened={() => setNewFilter(null)}
+          />
+        </div>
+
+        {view.kind === "table" && (
+          <TableView
+            {...props}
+            onColumnMenu={(column, anchor) => setColumnMenu({ column, anchor })}
+            onAddColumn={addColumn}
+            onReorder={reorder}
           />
         )}
-        {database.view === "calendar" && (
-          <CalendarView
-            db={database}
-            rows={rows}
-            onOpenNote={onOpenNote}
-            onChangeValue={changeValue}
-            onNewRow={(preset) => onNewRow(database.path, preset)}
-            onDateBy={(date_by) => saveConfig({ date_by })}
-          />
-        )}
-        {database.view === "table" && (
-          <table className="w-max min-w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-y border-neutral-200 dark:border-neutral-800">
-                <th className="w-56 min-w-56 border-r border-neutral-200 p-0 dark:border-neutral-800">
-                  <button
-                    type="button"
-                    className={headerButton}
-                    onClick={(e) => columnMenu(null, e)}
-                  >
-                    <Type className="size-3.5 shrink-0 text-neutral-400" />
-                    Nombre{sortMark("")}
-                  </button>
-                </th>
-                {database.columns.map((c) => (
-                  <th
-                    key={c.name}
-                    className="min-w-40 border-r border-neutral-200 p-0 dark:border-neutral-800"
-                  >
-                    <button
-                      type="button"
-                      className={headerButton}
-                      onClick={(e) => columnMenu(c, e)}
-                      title={KIND_LABELS[c.kind]}
-                    >
-                      {(() => {
-                        const Icon = KIND_ICONS[c.kind];
-                        return <Icon className="size-3.5 shrink-0 text-neutral-400" />;
-                      })()}
-                      <span className="truncate">{c.name}</span>
-                      {sortMark(c.name)}
-                    </button>
-                  </th>
-                ))}
-                <th className="p-0">
-                  <button
-                    type="button"
-                    onClick={addColumn}
-                    className={`${headerButton} text-neutral-400`}
-                    aria-label="Nueva propiedad"
-                    title="Nueva propiedad"
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={row.path}
-                  className="group border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
-                >
-                  <td className="border-r border-neutral-200 p-0 dark:border-neutral-800">
-                    <button
-                      type="button"
-                      onClick={() => onOpenNote(row.path)}
-                      className="w-full truncate px-2 py-1.5 text-left font-medium hover:underline"
-                      title={row.error ?? `Abrir ${row.name}`}
-                    >
-                      {row.error && (
-                        <span className="mr-1 text-red-500">⚠</span>
-                      )}
-                      {typeof row.props[ICON_KEY] === "string" && (
-                        <span className="mr-1.5">{row.props[ICON_KEY] as string}</span>
-                      )}
-                      {row.subfolder && (
-                        <span className="mr-1 font-normal text-neutral-400">
-                          {row.subfolder}/
-                        </span>
-                      )}
-                      {row.name}
-                    </button>
-                  </td>
-                  {database.columns.map((c) => (
-                    <td
-                      key={c.name}
-                      className="border-r border-neutral-200 p-0.5 dark:border-neutral-800"
-                    >
-                      {row.error ? null : (
-                        <PropertyInput
-                          id={`${row.path}-${c.name}`}
-                          kind={c.kind}
-                          value={row.props[c.name]}
-                          options={options[c.name]}
-                          onChange={(v) => changeValue(row.path, c.name, v)}
-                        />
-                      )}
-                    </td>
-                  ))}
-                  <td />
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {view.kind === "board" && <BoardView {...props} />}
+        {view.kind === "calendar" && <CalendarView {...props} />}
+        {view.kind === "gallery" && <GalleryView {...props} />}
+        {view.kind === "list" && <ListView {...props} />}
+        {view.kind === "timeline" && <TimelineView {...props} />}
+
         {database.rows.length === 0 && (
-          <p className="mt-4 text-sm text-neutral-400">
-            Aún no hay notas. Pulsa «Nueva» para crear la primera fila.
-          </p>
+          <p className="mt-4 text-sm text-neutral-400">Aún no hay notas. Pulsa «Nueva» para crear la primera fila.</p>
+        )}
+        {database.rows.length > 0 && rows.length === 0 && (
+          <p className="mt-4 text-sm text-neutral-400">Ninguna nota cumple los filtros de esta vista.</p>
         )}
       </div>
+
+      {columnMenu && (
+        <ColumnMenu
+          anchor={columnMenu.anchor}
+          column={columnMenu.column}
+          db={database}
+          related={related}
+          databases={databases}
+          onClose={() => setColumnMenu(null)}
+          onRename={(name) => columnMenu.column && renameColumn(columnMenu.column, name)}
+          onChange={(column) => {
+            setColumnMenu((m) => (m ? { ...m, column } : m));
+            saveConfig({ ...database, columns: database.columns.map((c) => (c.name === column.name ? column : c)) });
+          }}
+          onSort={(desc) => updateCurrent({ sort: { column: columnMenu.column?.name ?? "", desc } })}
+          onFilter={() => addFilter(columnMenu.column?.name ?? "")}
+          onHide={() => columnMenu.column && updateCurrent({ hidden: [...view.hidden, columnMenu.column.name] })}
+          onDelete={() => columnMenu.column && deleteColumn(columnMenu.column)}
+        />
+      )}
+
+      {peekRow && (
+        <PeekPanel
+          row={peekRow}
+          ctx={ctx}
+          options={options}
+          onClose={() => setPeek(null)}
+          onOpenNote={onOpenNote}
+          onOpenLink={onOpenLink}
+          onChangeValue={changeValue}
+        />
+      )}
     </div>
   );
 }

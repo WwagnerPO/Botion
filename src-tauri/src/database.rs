@@ -2,13 +2,16 @@
 //! una tabla. Cada nota de la carpeta es una fila y sus propiedades
 //! (frontmatter) son las columnas.
 //!
-//! El fichero solo guarda la configuración de la vista (columnas, tipos y
-//! orden); los datos siempre están en las notas.
+//! El fichero solo guarda la configuración (columnas, tipos, vistas con sus
+//! filtros y orden); los datos siempre están en las notas. Las columnas
+//! calculadas (fórmulas, rollups, fechas del fichero) se calculan en la
+//! interfaz y no se escriben en las notas.
 
 use crate::props::{self, Props};
 use crate::vault::{self, VaultState, write_atomic};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -23,12 +26,55 @@ pub enum Kind {
     Date,
     Select,
     Tags,
+    Url,
+    Email,
+    Phone,
+    /// Lista de enlaces a adjuntos.
+    Files,
+    /// Lista de enlaces `[[nota]]` a filas de otra base de datos.
+    Relation,
+    /// Calculadas: no se guardan en las notas.
+    Rollup,
+    Formula,
+    Created,
+    Edited,
+}
+
+/// Valor que se saca de las filas relacionadas (Notion lo llama «rollup»).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Rollup {
+    /// Columna de relación de esta base de datos.
+    pub relation: String,
+    /// Propiedad de la base de datos relacionada.
+    pub property: String,
+    /// Cómo se resumen los valores: `count`, `sum`, `average`...
+    pub function: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Column {
     pub name: String,
     pub kind: Kind,
+    /// Expresión de las columnas de tipo fórmula.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula: Option<String>,
+    /// Carpeta de la base de datos a la que apunta una relación.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollup: Option<Rollup>,
+}
+
+impl Column {
+    fn new(name: String, kind: Kind) -> Self {
+        Column {
+            name,
+            kind,
+            formula: None,
+            relation: None,
+            rollup: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -44,21 +90,164 @@ pub enum View {
     Table,
     Board,
     Calendar,
+    Gallery,
+    List,
+    Timeline,
+}
+
+impl View {
+    fn label(self) -> &'static str {
+        match self {
+            View::Table => "Tabla",
+            View::Board => "Kanban",
+            View::Calendar => "Calendario",
+            View::Gallery => "Galería",
+            View::List => "Lista",
+            View::Timeline => "Cronograma",
+        }
+    }
+}
+
+/// Condición de un filtro: `column` `op` `value` («estado es Hecho»).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Filter {
+    pub column: String,
+    pub op: String,
+    #[serde(default)]
+    pub value: Value,
+}
+
+/// Una vista guardada: tipo, filtros, orden y cómo se ven las columnas.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ViewConfig {
+    pub id: String,
+    pub name: String,
+    pub kind: View,
+    pub filters: Vec<Filter>,
+    pub sort: Option<Sort>,
+    /// Agrupar (kanban, tabla, lista, galería).
+    pub group_by: Option<String>,
+    /// Fecha del calendario, o inicio en el cronograma.
+    pub date_by: Option<String>,
+    /// Fecha de fin en el cronograma.
+    pub end_by: Option<String>,
+    /// Columnas ocultas en esta vista.
+    pub hidden: Vec<String>,
+    /// Ancho de las columnas de la tabla, en píxeles.
+    pub widths: BTreeMap<String, u32>,
+    /// Total al pie de cada columna (`count`, `sum`...).
+    pub totals: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
     pub columns: Vec<Column>,
-    pub sort: Option<Sort>,
-    /// Vista con la que se abre: tabla, kanban o calendario.
-    pub view: View,
-    /// Columna de selección que agrupa las tarjetas del kanban.
-    pub group_by: Option<String>,
-    /// Columna de fecha que coloca las notas en el calendario.
-    pub date_by: Option<String>,
+    pub views: Vec<ViewConfig>,
+    /// Vista con la que se abre.
+    pub active_view: Option<String>,
     /// Incluir también las notas de las subcarpetas.
     pub subfolders: bool,
+    // Formato antiguo (una sola vista): se lee y se pasa a `views`.
+    #[serde(skip_serializing)]
+    sort: Option<Sort>,
+    #[serde(skip_serializing)]
+    view: View,
+    #[serde(skip_serializing)]
+    group_by: Option<String>,
+    #[serde(skip_serializing)]
+    date_by: Option<String>,
+}
+
+impl Config {
+    /// Pasa el formato antiguo a vistas y asegura que hay al menos una.
+    fn normalize(mut self) -> Self {
+        if self.views.is_empty() {
+            self.views.push(ViewConfig {
+                id: "vista-1".into(),
+                name: self.view.label().into(),
+                kind: self.view,
+                sort: self.sort.take(),
+                group_by: self.group_by.take(),
+                date_by: self.date_by.take(),
+                ..Default::default()
+            });
+        }
+        if !self
+            .active_view
+            .as_ref()
+            .is_some_and(|id| self.views.iter().any(|v| &v.id == id))
+        {
+            self.active_view = Some(self.views[0].id.clone());
+        }
+        self
+    }
+
+    /// Cambia (o quita, con `None`) las referencias a una columna.
+    fn rename_refs(&mut self, old: &str, new: Option<&str>) {
+        let swap = |slot: &mut Option<String>| {
+            if slot.as_deref() == Some(old) {
+                *slot = new.map(str::to_string);
+            }
+        };
+        for view in &mut self.views {
+            swap(&mut view.group_by);
+            swap(&mut view.date_by);
+            swap(&mut view.end_by);
+            if view.sort.as_ref().is_some_and(|s| s.column == old) {
+                view.sort = new.map(|n| Sort {
+                    column: n.to_string(),
+                    desc: view.sort.as_ref().is_some_and(|s| s.desc),
+                });
+            }
+            view.filters.retain_mut(|f| {
+                if f.column != old {
+                    return true;
+                }
+                new.map(|n| f.column = n.to_string()).is_some()
+            });
+            view.hidden.retain_mut(|h| {
+                if h != old {
+                    return true;
+                }
+                new.map(|n| *h = n.to_string()).is_some()
+            });
+            for map in [&mut view.widths as &mut dyn RenameKey, &mut view.totals] {
+                map.rename_key(old, new);
+            }
+        }
+        for col in &mut self.columns {
+            if let Some(rollup) = &mut col.rollup
+                && rollup.relation == old
+                && let Some(n) = new
+            {
+                rollup.relation = n.to_string();
+            }
+            if let (Some(formula), Some(n)) = (&mut col.formula, new) {
+                for quote in ['"', '\''] {
+                    *formula = formula.replace(
+                        &format!("prop({quote}{old}{quote})"),
+                        &format!("prop({quote}{n}{quote})"),
+                    );
+                }
+            }
+        }
+    }
+}
+
+trait RenameKey {
+    fn rename_key(&mut self, old: &str, new: Option<&str>);
+}
+
+impl<V> RenameKey for BTreeMap<String, V> {
+    fn rename_key(&mut self, old: &str, new: Option<&str>) {
+        if let Some(v) = self.remove(old)
+            && let Some(n) = new
+        {
+            self.insert(n.to_string(), v);
+        }
+    }
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -70,6 +259,9 @@ pub struct Row {
     pub props: Props,
     /// Si el frontmatter no se puede leer, la fila se muestra sin editar.
     pub error: Option<String>,
+    /// Creación y última modificación del fichero, en milisegundos.
+    pub created: Option<u64>,
+    pub modified: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,12 +269,15 @@ pub struct Database {
     pub path: String,
     pub name: String,
     pub columns: Vec<Column>,
-    pub sort: Option<Sort>,
-    pub view: View,
-    pub group_by: Option<String>,
-    pub date_by: Option<String>,
+    pub views: Vec<ViewConfig>,
+    pub active_view: Option<String>,
     pub subfolders: bool,
     pub rows: Vec<Row>,
+}
+
+fn millis(time: std::io::Result<std::time::SystemTime>) -> Option<u64> {
+    let since = time.ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+    u64::try_from(since.as_millis()).ok()
 }
 
 pub fn is_database(dir: &Path) -> bool {
@@ -94,10 +289,18 @@ fn infer(value: &Value) -> Kind {
     match value {
         Value::Bool(_) => Kind::Checkbox,
         Value::Number(_) => Kind::Number,
+        // Una lista de enlaces `[[nota]]` es una relación (como en Obsidian).
+        Value::Array(items) if !items.is_empty() && items.iter().all(is_link) => Kind::Relation,
         Value::Array(_) => Kind::Tags,
         Value::String(s) if is_date(s) => Kind::Date,
         _ => Kind::Text,
     }
+}
+
+fn is_link(value: &Value) -> bool {
+    value
+        .as_str()
+        .is_some_and(|s| s.trim().starts_with("[[") && s.trim().ends_with("]]"))
 }
 
 fn is_date(s: &str) -> bool {
@@ -113,8 +316,9 @@ fn is_date(s: &str) -> bool {
 fn read_config(dir: &Path) -> Config {
     fs::read_to_string(dir.join(CONFIG_FILE))
         .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
+        .and_then(|s| serde_json::from_str::<Config>(&s).ok())
         .unwrap_or_default()
+        .normalize()
 }
 
 fn write_config(dir: &Path, config: &Config) -> Result<(), String> {
@@ -123,7 +327,6 @@ fn write_config(dir: &Path, config: &Config) -> Result<(), String> {
         .map_err(|e| format!("No se pudo guardar la base de datos: {e}"))
 }
 
-/// Notas que están directamente dentro de la carpeta (no en subcarpetas).
 /// Notas de la base de datos: las de la carpeta y, si se pide, las de sus
 /// subcarpetas (sin ficheros ni carpetas ocultos).
 fn row_paths(root: &Path, folder: &str, subfolders: bool) -> Result<Vec<String>, String> {
@@ -179,7 +382,11 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
             } else {
                 path.strip_prefix(&format!("{folder}/")).unwrap_or(&path)
             };
+            let meta = fs::metadata(root.join(&path)).ok();
+            let modified = meta.as_ref().and_then(|m| millis(m.modified()));
             Row {
+                created: meta.as_ref().and_then(|m| millis(m.created())).or(modified),
+                modified,
                 subfolder: inside.rsplit_once('/').map_or("", |(d, _)| d).to_string(),
                 name: stem(&path),
                 path,
@@ -195,10 +402,7 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
     for row in &rows {
         for (key, value) in &row.props {
             if !columns.iter().any(|c| &c.name == key) {
-                columns.push(Column {
-                    name: key.clone(),
-                    kind: infer(value),
-                });
+                columns.push(Column::new(key.clone(), infer(value)));
             }
         }
     }
@@ -207,10 +411,8 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
         path: folder.to_string(),
         name: folder.rsplit('/').next().unwrap_or(folder).to_string(),
         columns,
-        sort: config.sort,
-        view: config.view,
-        group_by: config.group_by,
-        date_by: config.date_by,
+        views: config.views,
+        active_view: config.active_view,
         subfolders: config.subfolders,
         rows,
     })
@@ -259,16 +461,7 @@ pub fn rename_property(root: &Path, folder: &str, old: &str, new: &str) -> Resul
             col.name = new.to_string();
         }
     }
-    if let Some(sort) = &mut config.sort
-        && sort.column == old
-    {
-        sort.column = new.to_string();
-    }
-    for col in [&mut config.group_by, &mut config.date_by] {
-        if col.as_deref() == Some(old) {
-            *col = Some(new.to_string());
-        }
-    }
+    config.rename_refs(old, Some(new));
     write_config(&dir, &config)
 }
 
@@ -283,14 +476,7 @@ pub fn delete_property(root: &Path, folder: &str, key: &str) -> Result<(), Strin
         }
     })?;
     config.columns.retain(|c| c.name != key);
-    if config.sort.as_ref().is_some_and(|s| s.column == key) {
-        config.sort = None;
-    }
-    for col in [&mut config.group_by, &mut config.date_by] {
-        if col.as_deref() == Some(key) {
-            *col = None;
-        }
-    }
+    config.rename_refs(key, None);
     write_config(&dir, &config)
 }
 
@@ -310,7 +496,7 @@ pub fn save_database_config(
     state: tauri::State<VaultState>,
 ) -> Result<(), String> {
     let root = vault::current_root(&state)?;
-    write_config(&vault::resolve_dir(&root, &path)?, &config)
+    write_config(&vault::resolve_dir(&root, &path)?, &config.normalize())
 }
 
 /// Convierte una carpeta en base de datos, creándola si no existe.
@@ -482,23 +668,87 @@ mod tests {
         let root = dir.path();
         let tareas = root.join("Tareas");
         let mut config = read_config(&tareas);
-        config.view = View::Board;
-        config.group_by = Some("estado".into());
+        let view = &mut config.views[0];
+        view.kind = View::Board;
+        view.group_by = Some("estado".into());
+        view.hidden = vec!["estado".into()];
+        view.widths.insert("estado".into(), 200);
+        view.totals.insert("estado".into(), "count".into());
+        view.sort = Some(Sort {
+            column: "estado".into(),
+            desc: true,
+        });
+        view.filters.push(Filter {
+            column: "estado".into(),
+            op: "is".into(),
+            value: json!("Hecho"),
+        });
+        config.columns.push(Column {
+            formula: Some(r#"concat(prop("estado"), "!")"#.into()),
+            ..Column::new("grito".into(), Kind::Formula)
+        });
         write_config(&tareas, &config).unwrap();
 
         rename_property(root, "Tareas", "estado", "fase").unwrap();
         let config = read_config(&tareas);
-        assert_eq!(config.view, View::Board);
-        assert_eq!(config.group_by.as_deref(), Some("fase"));
+        let view = &config.views[0];
+        assert_eq!(view.kind, View::Board);
+        assert_eq!(view.group_by.as_deref(), Some("fase"));
+        assert_eq!(view.hidden, ["fase"]);
+        assert_eq!(view.widths.get("fase"), Some(&200));
+        assert_eq!(view.totals.get("fase").map(String::as_str), Some("count"));
+        assert_eq!(
+            view.sort.as_ref().map(|s| (s.column.as_str(), s.desc)),
+            Some(("fase", true))
+        );
+        assert_eq!(view.filters[0].column, "fase");
+        assert_eq!(
+            config
+                .columns
+                .iter()
+                .find(|c| c.name == "grito")
+                .unwrap()
+                .formula
+                .as_deref(),
+            Some(r#"concat(prop("fase"), "!")"#)
+        );
 
         delete_property(root, "Tareas", "fase").unwrap();
-        assert_eq!(read_config(&tareas).group_by, None);
+        let view = &read_config(&tareas).views[0];
+        assert_eq!(view.group_by, None);
+        assert!(view.hidden.is_empty() && view.filters.is_empty() && view.sort.is_none());
+        assert!(view.widths.is_empty() && view.totals.is_empty());
     }
 
     #[test]
-    fn configuracion_antigua_sigue_valiendo() {
-        let config: Config = serde_json::from_str(r#"{"columns":[]}"#).unwrap();
-        assert_eq!(config.view, View::Table);
+    fn configuracion_antigua_pasa_a_vistas() {
+        let config = serde_json::from_str::<Config>(r#"{"columns":[]}"#)
+            .unwrap()
+            .normalize();
+        assert_eq!(config.views.len(), 1);
+        assert_eq!(config.views[0].kind, View::Table);
+        assert_eq!(config.active_view.as_deref(), Some("vista-1"));
+
+        let old = r#"{"columns":[],"view":"board","group_by":"estado","sort":{"column":"x","desc":false}}"#;
+        let config = serde_json::from_str::<Config>(old).unwrap().normalize();
+        let view = &config.views[0];
+        assert_eq!((view.kind, view.name.as_str()), (View::Board, "Kanban"));
+        assert_eq!(view.group_by.as_deref(), Some("estado"));
+        assert_eq!(view.sort.as_ref().map(|s| s.column.as_str()), Some("x"));
+        // Al guardar ya no se escribe el formato antiguo.
+        let json = serde_json::to_value(&config).unwrap();
+        assert!(json.get("view").is_none() && json.get("group_by").is_none());
+    }
+
+    #[test]
+    fn filas_con_fechas_del_fichero() {
+        let dir = vault();
+        let db = load(dir.path(), "Tareas").unwrap();
+        assert!(
+            db.rows
+                .iter()
+                .all(|r| r.created.is_some() && r.modified.is_some())
+        );
     }
 
     #[test]
@@ -525,6 +775,13 @@ mod tests {
         // Renombrar también llega a las de las subcarpetas.
         rename_property(root, "Tareas", "no", "sí").unwrap();
         assert!(read(root, "Tareas/Sub/Otra.md").contains("sí: cuenta"));
+    }
+
+    #[test]
+    fn listas_de_enlaces_son_relaciones() {
+        assert_eq!(infer(&json!(["[[Web]]", "[[App|la app]]"])), Kind::Relation);
+        assert_eq!(infer(&json!(["casa", "[[Web]]"])), Kind::Tags);
+        assert_eq!(infer(&json!([])), Kind::Tags);
     }
 
     #[test]

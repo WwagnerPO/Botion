@@ -13,6 +13,9 @@ interface Props_ {
   onChange: (key: string, value: PropValue) => void;
   onRemove: (key: string) => void;
   onAdd: () => void;
+  /** Base de datos de cada propiedad de tipo relación. */
+  relations?: Record<string, string>;
+  onOpenLink?: (target: string) => void;
 }
 
 /** Propiedades de la nota (su frontmatter), encima del editor. */
@@ -24,6 +27,8 @@ export function PropertiesPanel({
   onChange,
   onRemove,
   onAdd,
+  relations = {},
+  onOpenLink,
 }: Props_) {
   const entries = Object.entries(props);
   if (entries.length === 0) return null;
@@ -47,6 +52,9 @@ export function PropertiesPanel({
               options={options[key]}
               onChange={(v) => onChange(key, v)}
               alignNumbers={false}
+              notePath={path}
+              relation={relations[key]}
+              onOpenLink={onOpenLink}
             />
           </div>
           <button

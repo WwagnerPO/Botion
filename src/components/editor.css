@@ -333,3 +333,18 @@ svg.botion-icon * {
   border-radius: 8px;
   background: #000;
 }
+
+/* Texto de la nota en la vista rápida de una base de datos. */
+.peek-body { line-height: 1.65; }
+.peek-body > * + * { margin-top: 0.6em; }
+.peek-body h1 { font-size: 1.6em; font-weight: 700; }
+.peek-body h2 { font-size: 1.3em; font-weight: 650; }
+.peek-body h3 { font-size: 1.1em; font-weight: 600; }
+.peek-body ul { list-style: disc; padding-left: 1.4em; }
+.peek-body ol { list-style: decimal; padding-left: 1.4em; }
+.peek-body blockquote { border-left: 3px solid currentColor; padding-left: 1em; opacity: 0.85; }
+.peek-body code { border-radius: 4px; background: rgb(0 0 0 / 0.05); padding: 0.1em 0.3em; font-size: 0.9em; }
+.dark .peek-body code { background: rgb(255 255 255 / 0.08); }
+.peek-body pre { overflow-x: auto; border-radius: 8px; background: rgb(0 0 0 / 0.04); padding: 0.8em 1em; }
+.peek-body mark { background: #fef08a; }
+.peek-body a { color: #6d28d9; text-decoration: underline; }
