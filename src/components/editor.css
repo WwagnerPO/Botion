@@ -114,3 +114,19 @@ svg.botion-icon * {
 .botion-editor .callout[data-fold] > .callout-title {
   color: inherit;
 }
+
+/* Texto resaltado ==así== */
+.botion-editor mark.highlight {
+  border-radius: 2px;
+  background: #fef08a;
+  color: inherit;
+  padding: 0 1px;
+}
+.dark .botion-editor mark.highlight {
+  background: rgb(202 138 4 / 0.45);
+}
+
+.botion-editor .mermaid-error {
+  color: #dc2626;
+  font-size: 0.85em;
+}

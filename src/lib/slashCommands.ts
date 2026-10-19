@@ -9,6 +9,7 @@ import {
   calloutTitleSchema,
   type CalloutType,
 } from "./callout";
+import { highlightSchema } from "./highlight";
 import { wikiLinkSchema } from "./wikilink";
 
 /**
@@ -40,13 +41,28 @@ const calloutIcon = icon(
 );
 const toggleIcon = icon('<path d="M8 6l6 6-6 6"/><path d="M15 18h5"/>');
 const tocIcon = icon('<path d="M4 6h16M7 12h13M10 18h10"/>');
+const highlightIcon = icon('<path d="M4 20h16"/><path d="M14.5 4.5l5 5L10 19H5v-5z"/>');
+const diagramIcon = icon(
+  '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/><path d="M6.5 8v5h11v3"/>',
+);
 const databaseIcon = icon(
   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
 );
 
-/** Quita el «/texto» que se ha escrito para abrir el menú. */
+/**
+ * Quita solo el «/texto» que se ha escrito para abrir el menú. Si el menú
+ * se abrió en mitad de una línea, el resto de la línea se conserva.
+ */
 function clearSlash(ctx: Ctx) {
-  ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+  const view = ctx.get(editorViewCtx);
+  const { $from } = view.state.selection;
+  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
+  const slash = before.lastIndexOf("/");
+  if (slash === -1) {
+    ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+    return;
+  }
+  view.dispatch(view.state.tr.delete($from.start() + slash, $from.pos));
 }
 
 function insertText(ctx: Ctx, text: string) {
@@ -85,8 +101,12 @@ function insertCallout(ctx: Ctx, type: CalloutType, fold: string) {
   const body = state.schema.nodes.paragraph.create();
   const node = calloutSchema.type(ctx).create({ calloutType: type, fold }, [title, body]);
   const $from = state.selection.$from;
-  const start = $from.before();
-  const tr = state.tr.replaceRangeWith(start, $from.after(), node);
+  // En una línea vacía se sustituye; si tiene texto, el aviso va debajo.
+  const empty = $from.parent.content.size === 0;
+  const start = empty ? $from.before() : $from.after();
+  const tr = empty
+    ? state.tr.replaceRangeWith(start, $from.after(), node)
+    : state.tr.insert(start, node);
   const cursor = fold ? start + 2 : start + 1 + title.nodeSize + 1;
   view.dispatch(tr.setSelection(TextSelection.create(tr.doc, cursor)).scrollIntoView());
   view.focus();
@@ -208,6 +228,31 @@ export function buildBotionMenu(handlers: SlashHandlers) {
         const markdown = tocMarkdown(ctx);
         if (markdown) insert(markdown)(ctx);
         else handlers.notify("El índice usa los títulos de nivel 2 o más; esta nota aún no tiene.");
+      },
+    });
+    group.addItem("highlight", {
+      label: "Resaltar",
+      icon: highlightIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        // Texto de ejemplo ya resaltado y seleccionado, para escribir encima.
+        const view = ctx.get(editorViewCtx);
+        const text = "texto resaltado";
+        const { from } = view.state.selection;
+        const tr = view.state.tr.insert(
+          from,
+          view.state.schema.text(text, [highlightSchema.type(ctx).create()]),
+        );
+        view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from, from + text.length)));
+        view.focus();
+      },
+    });
+    group.addItem("diagram", {
+      label: "Diagrama",
+      icon: diagramIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        insert("```mermaid\nflowchart LR\n  Idea --> Nota --> Proyecto\n```")(ctx);
       },
     });
     group.addItem("today", {

@@ -4,9 +4,11 @@ import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./editor.css";
 import { callout } from "../lib/callout";
+import { highlight, highlightSchema, toggleHighlightCommand } from "../lib/highlight";
+import { renderMermaidPreview } from "../lib/mermaid";
 import { buildBotionMenu } from "../lib/slashCommands";
 import { wikiLink, wikiLinkStatus, wikiLinkStatusKey } from "../lib/wikilink";
-import { editorViewCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { useEffect, useRef } from "react";
 
 interface Props {
@@ -71,6 +73,29 @@ export function Editor({
       root: rootRef.current,
       defaultValue: initialValue,
       featureConfigs: {
+        [Crepe.Feature.CodeMirror]: {
+          renderPreview: renderMermaidPreview,
+          previewLabel: "Vista previa",
+          previewLoading: "Cargando…",
+          previewToggleText: (previewOnly) => (previewOnly ? "Editar" : "Ocultar"),
+        },
+        [Crepe.Feature.Toolbar]: {
+          // Botón de resaltar en la barra que aparece al seleccionar texto.
+          buildToolbar: (builder) => {
+            builder.getGroup("formatting").addItem("highlight", {
+              label: "Resaltar",
+              shortcut: "Ctrl+Mayús+H",
+              icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="botion-icon"><path d="M4 20h16"/><path d="M14.5 4.5l5 5L10 19H5v-5z"/></svg>',
+              active: (ctx) => {
+                const { state } = ctx.get(editorViewCtx);
+                const type = highlightSchema.type(ctx);
+                const { from, to } = state.selection;
+                return state.doc.rangeHasMark(from, to, type);
+              },
+              onRun: (ctx) => ctx.get(commandsCtx).call(toggleHighlightCommand.key),
+            });
+          },
+        },
         [Crepe.Feature.Placeholder]: {
           text: "Escribe algo o pulsa «/» para insertar un bloque…",
         },
@@ -111,7 +136,7 @@ export function Editor({
         },
       },
     });
-    crepe.editor.use(callout).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    crepe.editor.use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
