@@ -4,13 +4,18 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@milkdown/crepe@7.22.3':
+    hash: c90d28b39b13559ca23fa860fc5bac38f64ba3d2e6e7699d03e3ef2bbd45e7d2
+    path: patches/@milkdown__crepe@7.22.3.patch
+
 importers:
 
   .:
     dependencies:
       '@milkdown/crepe':
         specifier: ^7.22.3
-        version: 7.22.3(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(typescript@6.0.3)
+        version: 7.22.3(patch_hash=c90d28b39b13559ca23fa860fc5bac38f64ba3d2e6e7699d03e3ef2bbd45e7d2)(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(typescript@6.0.3)
       '@milkdown/kit':
         specifier: 7.22.3
         version: 7.22.3(@codemirror/language@6.13.1)(@codemirror/state@6.7.6)(@codemirror/view@6.43.14)(typescript@6.0.3)
@@ -1722,7 +1727,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@milkdown/crepe@7.22.3(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(typescript@6.0.3)':
+  '@milkdown/crepe@7.22.3(patch_hash=c90d28b39b13559ca23fa860fc5bac38f64ba3d2e6e7699d03e3ef2bbd45e7d2)(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.6)(typescript@6.0.3)':
     dependencies:
       '@codemirror/commands': 6.11.1
       '@codemirror/language': 6.13.1

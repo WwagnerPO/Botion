@@ -1,7 +1,14 @@
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
 import { clearTextInCurrentBlockCommand } from "@milkdown/kit/preset/commonmark";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import { insert } from "@milkdown/kit/utils";
+import {
+  CALLOUT_TYPES,
+  calloutSchema,
+  calloutTitleSchema,
+  type CalloutType,
+} from "./callout";
 import { wikiLinkSchema } from "./wikilink";
 
 /**
@@ -25,6 +32,14 @@ const propertyIcon = icon(
 const templateIcon = icon(
   '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 16h4"/>',
 );
+const pageIcon = icon(
+  '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M12 11v6M9 14h6"/>',
+);
+const calloutIcon = icon(
+  '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h.01M11 10h6M8 14h8"/>',
+);
+const toggleIcon = icon('<path d="M8 6l6 6-6 6"/><path d="M15 18h5"/>');
+const tocIcon = icon('<path d="M4 6h16M7 12h13M10 18h10"/>');
 const databaseIcon = icon(
   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
 );
@@ -59,6 +74,41 @@ export function insertWikiLink(ctx: Ctx, target: string) {
   view.focus();
 }
 
+/**
+ * Sustituye el párrafo vacío del cursor por un aviso y deja el cursor en
+ * el título (desplegables) o en el contenido (avisos).
+ */
+function insertCallout(ctx: Ctx, type: CalloutType, fold: string) {
+  const view = ctx.get(editorViewCtx);
+  const { state } = view;
+  const title = calloutTitleSchema.type(ctx).create();
+  const body = state.schema.nodes.paragraph.create();
+  const node = calloutSchema.type(ctx).create({ calloutType: type, fold }, [title, body]);
+  const $from = state.selection.$from;
+  const start = $from.before();
+  const tr = state.tr.replaceRangeWith(start, $from.after(), node);
+  const cursor = fold ? start + 2 : start + 1 + title.nodeSize + 1;
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, cursor)).scrollIntoView());
+  view.focus();
+}
+
+/** Índice: lista de los títulos (nivel 2 o más) con enlaces `[[#título]]`. */
+function tocMarkdown(ctx: Ctx) {
+  const headings: { level: number; text: string }[] = [];
+  ctx.get(editorViewCtx).state.doc.descendants((node) => {
+    if (node.type.name === "heading" && node.attrs.level > 1) {
+      const text = node.textContent.replace(/[[\]|#]/g, "").trim();
+      if (text) headings.push({ level: node.attrs.level, text });
+    }
+    return node.type.name !== "heading";
+  });
+  if (headings.length === 0) return null;
+  const min = Math.min(...headings.map((h) => h.level));
+  return headings
+    .map((h) => `${"  ".repeat(h.level - min)}- [[#${h.text}]]`)
+    .join("\n");
+}
+
 export interface SlashHandlers {
   /** Pide elegir una nota; al elegirla se llama a `insert` con su destino. */
   requestLink: (insert: (target: string) => void) => void;
@@ -68,6 +118,10 @@ export interface SlashHandlers {
   createDatabase: () => void;
   /** Pide elegir una plantilla; al elegirla se inserta su Markdown. */
   requestTemplate: (insert: (markdown: string) => void) => void;
+  /** Pide el nombre de una página nueva; al crearla se inserta el enlace. */
+  requestPage: (insert: (target: string) => void) => void;
+  /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
+  notify: (message: string) => void;
 }
 
 type MenuBuilder = {
@@ -91,6 +145,14 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestLink((target) => insertWikiLink(ctx, target));
+      },
+    });
+    group.addItem("page", {
+      label: "Página",
+      icon: pageIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestPage((target) => insertWikiLink(ctx, target));
       },
     });
     group.addItem("property", {
@@ -118,6 +180,34 @@ export function buildBotionMenu(handlers: SlashHandlers) {
           insert(markdown)(ctx);
           ctx.get(editorViewCtx).focus();
         });
+      },
+    });
+    for (const [type, { label }] of Object.entries(CALLOUT_TYPES)) {
+      group.addItem(`callout-${type}`, {
+        label: `Aviso: ${label.toLowerCase()}`,
+        icon: calloutIcon,
+        onRun: (ctx) => {
+          clearSlash(ctx);
+          insertCallout(ctx, type as CalloutType, "");
+        },
+      });
+    }
+    group.addItem("toggle", {
+      label: "Desplegable",
+      icon: toggleIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        insertCallout(ctx, "note", "-");
+      },
+    });
+    group.addItem("toc", {
+      label: "Índice",
+      icon: tocIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        const markdown = tocMarkdown(ctx);
+        if (markdown) insert(markdown)(ctx);
+        else handlers.notify("El índice usa los títulos de nivel 2 o más; esta nota aún no tiene.");
       },
     });
     group.addItem("today", {

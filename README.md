@@ -25,14 +25,16 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 
 ### Comandos `/`
 
-Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Puedes seguir escribiendo para filtrar (por ejemplo `/fecha`).
+Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Puedes seguir escribiendo para filtrar, con o sin tildes (por ejemplo `/fecha` o `/titulo`).
+
+Los avisos y desplegables usan la sintaxis de Obsidian (`> [!tip] Título` y `> [!note]- Título`), así que se ven igual en los dos programas. El índice enlaza a los títulos de la nota con `[[#título]]`.
 
 | Grupo | Comandos |
 |-------|----------|
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Imagen, Código, Tabla, Fórmula |
-| Botion | Enlace a nota (busca o crea la nota e inserta `[[nota]]`), Propiedad, Base de datos, Plantilla, Fecha de hoy, Hora actual |
+| Botion | Página (crea una nota y la enlaza), Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Fecha de hoy, Hora actual |
 
 ### Bases de datos
 

@@ -431,6 +431,24 @@ export default function App() {
     }
   }
 
+  /** Comando «/Página»: crea una nota junto a la abierta y la enlaza. */
+  function requestPage(insert: (target: string) => void) {
+    const folder = noteRef.current?.path.split("/").slice(0, -1).join("/") ?? "";
+    setDialog({
+      kind: "prompt",
+      title: "Nueva página",
+      label: "Nombre",
+      initial: "Sin título",
+      confirm: "Crear",
+      onConfirm: (name) =>
+        run(async () => {
+          const path = await createNote(folder ? `${folder}/${name}` : name);
+          await reloadTree();
+          insert(linkTarget(path));
+        }),
+    });
+  }
+
   /** Nueva fila (nota) en una base de datos, sin salir de la tabla. */
   function newRow(folder: string, preset: Props = {}) {
     setDialog({
@@ -757,6 +775,8 @@ export default function App() {
                   chooseTemplate({ mode: "insert", insert })
                 }
                 linkExists={linkExists}
+                onRequestPage={requestPage}
+                onNotify={setNotice}
               />
               <Backlinks
                 backlinks={backlinks}

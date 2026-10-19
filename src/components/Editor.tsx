@@ -3,6 +3,7 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./editor.css";
+import { callout } from "../lib/callout";
 import { buildBotionMenu } from "../lib/slashCommands";
 import { wikiLink, wikiLinkStatus, wikiLinkStatusKey } from "../lib/wikilink";
 import { editorViewCtx } from "@milkdown/kit/core";
@@ -23,6 +24,9 @@ interface Props {
   onRequestTemplate: (insert: (markdown: string) => void) => void;
   /** Dice si un enlace `[[...]]` apunta a una nota que existe. */
   linkExists: (target: string) => boolean;
+  /** Comando «/Página». */
+  onRequestPage: (insert: (target: string) => void) => void;
+  onNotify: (message: string) => void;
 }
 
 /**
@@ -38,6 +42,8 @@ export function Editor({
   onCreateDatabase,
   onRequestTemplate,
   linkExists,
+  onRequestPage,
+  onNotify,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -55,6 +61,10 @@ export function Editor({
   const linkExistsRef = useRef(linkExists);
   linkExistsRef.current = linkExists;
   const crepeRef = useRef<Crepe | null>(null);
+  const onRequestPageRef = useRef(onRequestPage);
+  onRequestPageRef.current = onRequestPage;
+  const onNotifyRef = useRef(onNotify);
+  onNotifyRef.current = onNotify;
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -95,11 +105,13 @@ export function Editor({
             addProperty: () => onAddPropertyRef.current(),
             createDatabase: () => onCreateDatabaseRef.current(),
             requestTemplate: (insert) => onRequestTemplateRef.current(insert),
+            requestPage: (insert) => onRequestPageRef.current(insert),
+            notify: (message) => onNotifyRef.current(message),
           }),
         },
       },
     });
-    crepe.editor.use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    crepe.editor.use(callout).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
@@ -142,11 +154,22 @@ export function Editor({
   }, [linkExists]);
 
   function handleClick(e: React.MouseEvent) {
-    const link = (e.target as HTMLElement).closest<HTMLElement>("[data-wikilink]");
-    if (link?.dataset.wikilink) {
-      e.preventDefault();
-      onOpenLinkRef.current(link.dataset.wikilink);
+    const target = e.target as HTMLElement;
+
+    const link = target.closest<HTMLElement>("[data-wikilink]");
+    const dest = link?.dataset.wikilink;
+    if (!dest) return;
+    e.preventDefault();
+    // [[#Sección]]: salta al título de esta misma nota.
+    if (dest.startsWith("#")) {
+      const name = dest.slice(1).trim().toLowerCase();
+      const heading = [...(rootRef.current?.querySelectorAll("h1, h2, h3, h4, h5, h6") ?? [])].find(
+        (h) => h.textContent?.trim().toLowerCase() === name,
+      );
+      heading?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
     }
+    onOpenLinkRef.current(dest);
   }
 
   return <div ref={rootRef} className="botion-editor" onClick={handleClick} />;

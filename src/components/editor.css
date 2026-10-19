@@ -73,3 +73,44 @@ svg.botion-icon * {
 .dark .botion-editor .wikilink.wikilink-missing {
   color: #8b7fc4;
 }
+
+/* Avisos > [!tipo] y desplegables > [!tipo]- */
+.botion-editor .callout {
+  --callout: 59 130 246;
+  margin: 0.75rem 0;
+  border-left: 3px solid rgb(var(--callout));
+  border-radius: 6px;
+  background: rgb(var(--callout) / 0.08);
+  padding: 0.5rem 0.9rem;
+}
+.botion-editor .callout[data-callout="tip"] { --callout: 22 163 74; }
+.botion-editor .callout[data-callout="warning"] { --callout: 217 119 6; }
+.botion-editor .callout[data-callout="danger"] { --callout: 220 38 38; }
+
+.botion-editor .callout-title {
+  font-weight: 600;
+  color: rgb(var(--callout));
+}
+.botion-editor .callout-title::before { content: "ℹ️ Nota "; }
+.botion-editor .callout[data-callout="tip"] > .callout-title::before { content: "💡 Consejo "; }
+.botion-editor .callout[data-callout="warning"] > .callout-title::before { content: "⚠️ Aviso "; }
+.botion-editor .callout[data-callout="danger"] > .callout-title::before { content: "⛔ Peligro "; }
+
+/* Desplegables: flecha en el título; «-» empieza cerrado, «+» abierto. */
+.botion-editor .callout[data-fold="-"] > .callout-title::before,
+.botion-editor .callout[data-fold="+"] > .callout-title::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 1.4em;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.botion-editor .callout.is-open > .callout-title::before {
+  transform: rotate(90deg);
+}
+.botion-editor .callout.is-closed > :not(.callout-title) {
+  display: none;
+}
+.botion-editor .callout[data-fold] > .callout-title {
+  color: inherit;
+}

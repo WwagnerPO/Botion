@@ -1,0 +1,52 @@
+diff --git a/lib/cjs/feature/block-edit/index.js b/lib/cjs/feature/block-edit/index.js
+index 69a885d5cae11059c5597d927c061e4bf04052ae..32209e7a2987b5269ac6f562f572aa2b8ceb46c0 100644
+--- a/lib/cjs/feature/block-edit/index.js
++++ b/lib/cjs/feature/block-edit/index.js
+@@ -738,7 +738,7 @@ function getGroups(filter, config, ctx) {
+   if (filter) {
+     groups = groups.map((group) => {
+       const items2 = group.items.filter(
+-        (item) => item.label.toLowerCase().includes(filter.toLowerCase())
++        (item) => item.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(filter.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+       );
+       return {
+         ...group,
+diff --git a/lib/cjs/index.js b/lib/cjs/index.js
+index 40e23cfda9624c524591047fb5112e7b47a1b8ee..fc4b76cf50007dc7820061f248ea32b05786a5b0 100644
+--- a/lib/cjs/index.js
++++ b/lib/cjs/index.js
+@@ -2502,7 +2502,7 @@ function getGroups$2(filter, config, ctx) {
+   if (filter) {
+     groups = groups.map((group) => {
+       const items2 = group.items.filter(
+-        (item) => item.label.toLowerCase().includes(filter.toLowerCase())
++        (item) => item.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(filter.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+       );
+       return {
+         ...group,
+diff --git a/lib/esm/feature/block-edit/index.js b/lib/esm/feature/block-edit/index.js
+index e10bae88c03d017f3dfd533c71ed388018e39669..e57171adaeb5c2dfc5e03db5094af1de0cc43c99 100644
+--- a/lib/esm/feature/block-edit/index.js
++++ b/lib/esm/feature/block-edit/index.js
+@@ -736,7 +736,7 @@ function getGroups(filter, config, ctx) {
+   if (filter) {
+     groups = groups.map((group) => {
+       const items2 = group.items.filter(
+-        (item) => item.label.toLowerCase().includes(filter.toLowerCase())
++        (item) => item.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(filter.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+       );
+       return {
+         ...group,
+diff --git a/lib/esm/index.js b/lib/esm/index.js
+index adae4fac966f7f2fa0d105ff7abbca27243aea5b..fb23ff6b6c0b6b19c73af6426a0ee209c69ae9b4 100644
+--- a/lib/esm/index.js
++++ b/lib/esm/index.js
+@@ -2500,7 +2500,7 @@ function getGroups$2(filter, config, ctx) {
+   if (filter) {
+     groups = groups.map((group) => {
+       const items2 = group.items.filter(
+-        (item) => item.label.toLowerCase().includes(filter.toLowerCase())
++        (item) => item.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(filter.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+       );
+       return {
+         ...group,
