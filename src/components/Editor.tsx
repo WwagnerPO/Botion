@@ -16,7 +16,8 @@ import { renderMermaidPreview } from "../lib/mermaid";
 import { buildBotionMenu } from "../lib/slashCommands";
 import { wikiLink, wikiLinkStatus, wikiLinkStatusKey } from "../lib/wikilink";
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { findCounts, findPlugin, moveFind, setFindQuery } from "../lib/find";
 
 interface Props {
   initialValue: string;
@@ -40,6 +41,9 @@ interface Props {
   onRequestDatabase: (insert: (folder: string) => void) => void;
   /** Lo que necesitan las incrustaciones `![[...]]`. */
   embedHost: EmbedHost;
+  /** Barra de «Buscar en la nota» (Ctrl+F) abierta. */
+  findOpen: boolean;
+  onCloseFind: () => void;
   /** Comandos «/Exportar a PDF» y «/Exportar a HTML». */
   onExport: (format: "html" | "pdf") => void;
   /** Para guardar y mostrar imágenes adjuntas. */
@@ -81,6 +85,8 @@ export function Editor({
   notePath,
   onError,
   onExport,
+  findOpen,
+  onCloseFind,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -271,7 +277,7 @@ export function Editor({
       };
     });
 
-    crepe.editor.use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    crepe.editor.use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
@@ -332,5 +338,90 @@ export function Editor({
     onOpenLinkRef.current(dest);
   }
 
-  return <div ref={rootRef} className="botion-editor" onClick={handleClick} />;
+  return (
+    <>
+      {findOpen && (
+        <FindBar
+          onQuery={(q) => withView((view) => setFindQuery(view, q))}
+          onMove={(step) => withView((view) => moveFind(view, step))}
+          counts={() => withView((view) => findCounts(view.state)) ?? { total: 0, current: 0 }}
+          onClose={() => {
+            withView((view) => {
+              setFindQuery(view, "");
+              view.focus();
+            });
+            onCloseFind();
+          }}
+        />
+      )}
+      <div ref={rootRef} className="botion-editor" onClick={handleClick} />
+    </>
+  );
+
+  function withView<T>(f: (view: import("@milkdown/kit/prose/view").EditorView) => T): T | undefined {
+    let out: T | undefined;
+    crepeRef.current?.editor.action((ctx) => {
+      out = f(ctx.get(editorViewCtx));
+    });
+    return out;
+  }
+}
+
+/** Barra de buscar en la nota: Enter siguiente, Mayús+Enter anterior, Esc cierra. */
+function FindBar({
+  onQuery,
+  onMove,
+  counts,
+  onClose,
+}: {
+  onQuery: (q: string) => void;
+  onMove: (step: number) => void;
+  counts: () => { total: number; current: number };
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [, refresh] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+  const { total, current } = counts();
+  const step = (n: number) => {
+    onMove(n);
+    refresh((x) => x + 1);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="no-print sticky top-2 z-20 mx-14 mb-2 flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+      <input
+        ref={inputRef}
+        value={query}
+        placeholder="Buscar en la nota…"
+        aria-label="Buscar en la nota"
+        onChange={(e) => {
+          setQuery(e.target.value);
+          onQuery(e.target.value);
+          inputRef.current?.focus();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            step(e.shiftKey ? -1 : 1);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+        className="min-w-0 flex-1 bg-transparent outline-none"
+      />
+      <span className="shrink-0 text-xs text-neutral-400" aria-live="polite">
+        {query ? (total ? `${current + 1} de ${total}` : "Sin resultados") : ""}
+      </span>
+      <button type="button" onClick={() => step(-1)} aria-label="Anterior" className="px-1 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">↑</button>
+      <button type="button" onClick={() => step(1)} aria-label="Siguiente" className="px-1 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">↓</button>
+      <button type="button" onClick={onClose} aria-label="Cerrar búsqueda" className="px-1 text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100">✕</button>
+    </div>
+  );
 }

@@ -76,6 +76,13 @@ export function GitPanel({ root, beforeSync, onSynced, onError }: Props) {
     [refresh],
   );
 
+  // «Sincronizar con Git» desde la paleta de comandos.
+  useEffect(() => {
+    const onRequest = () => sync();
+    window.addEventListener("botion-git-sync", onRequest);
+    return () => window.removeEventListener("botion-git-sync", onRequest);
+  }, [sync]);
+
   useEffect(() => {
     if (!auto || !status?.repo) return;
     const timer = window.setInterval(() => sync(true), AUTO_MINUTES * 60_000);

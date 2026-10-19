@@ -11,6 +11,7 @@ import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { linkChecker } from "./lib/wikilink";
+import { applyTheme } from "./lib/theme";
 import { displayUrl } from "./lib/attachments";
 import { noteToHtml, printNote, saveHtml } from "./lib/export";
 import type { SyncResult } from "./lib/git";
@@ -95,6 +96,8 @@ export default function App() {
   } | null>(null);
   const [dialog, setDialog] = useState<DialogRequest | null>(null);
   const [searching, setSearching] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
   /** Comando «/Enlace a nota» esperando a que se elija una nota. */
   const [linkRequest, setLinkRequest] = useState<
     ((target: string) => void) | null
@@ -744,17 +747,42 @@ export default function App() {
     });
   }
 
-  // Atajos: Ctrl/Cmd + N nueva nota; Ctrl/Cmd + K o P buscar.
+  /** Acciones de la paleta de comandos (Ctrl+P). */
+  const commands: { id: string; name: string; hint?: string; run: () => void; needsNote?: boolean }[] = [
+    { id: "new-note", name: "Nueva nota", hint: "Ctrl+N", run: () => newNote() },
+    { id: "new-folder", name: "Nueva carpeta", run: () => newFolder() },
+    { id: "new-db", name: "Nueva base de datos", run: () => createDatabaseHere() },
+    { id: "from-template", name: "Nueva nota desde plantilla", run: () => chooseTemplate({ mode: "new", folder: "" }) },
+    { id: "search", name: "Buscar notas", hint: "Ctrl+K", run: () => setSearching(true) },
+    { id: "find", name: "Buscar en la nota", hint: "Ctrl+F", run: () => setFindOpen(true), needsNote: true },
+    { id: "export-pdf", name: "Exportar a PDF", run: () => exportNote("pdf"), needsNote: true },
+    { id: "export-html", name: "Exportar a HTML", run: () => exportNote("html"), needsNote: true },
+    { id: "add-property", name: "Añadir propiedad a la nota", run: () => addProperty(), needsNote: true },
+    { id: "git-sync", name: "Sincronizar con Git", run: () => window.dispatchEvent(new Event("botion-git-sync")) },
+    { id: "theme-light", name: "Tema claro", run: () => applyTheme("light") },
+    { id: "theme-dark", name: "Tema oscuro", run: () => applyTheme("dark") },
+    { id: "theme-system", name: "Tema del sistema", run: () => applyTheme("system") },
+    { id: "open-vault", name: "Abrir otra bóveda", run: () => handleOpenVault() },
+  ];
+  const availableCommands = commands.filter((c) => !c.needsNote || note);
+
+  // Atajos: Ctrl/Cmd + N nueva nota; K buscar notas; P comandos; F buscar en la nota.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || !vault) return;
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || !vault) return;
       const key = e.key.toLowerCase();
       if (key === "n") {
         e.preventDefault();
         newNote();
-      } else if (key === "k" || key === "p") {
+      } else if (key === "k") {
         e.preventDefault();
         setSearching(true);
+      } else if (key === "p") {
+        e.preventDefault();
+        setCommandsOpen(true);
+      } else if (key === "f" && noteRef.current) {
+        e.preventDefault();
+        setFindOpen(true);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -870,6 +898,8 @@ export default function App() {
                 notePath={note.path}
                 onError={showError}
                 onExport={exportNote}
+                findOpen={findOpen}
+                onCloseFind={() => setFindOpen(false)}
               />
               <Backlinks
                 backlinks={backlinks}
@@ -910,6 +940,24 @@ export default function App() {
       </main>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {commandsOpen && (
+        <SearchPalette
+          placeholder="Escribe un comando…"
+          recentLabel="Comandos"
+          allowCreate={false}
+          source={async (query) => {
+            const fold = (t: string) =>
+              t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const q = fold(query.trim());
+            return availableCommands
+              .filter((c) => fold(c.name).includes(q))
+              .map((c) => ({ path: c.id, name: c.name, snippet: c.hint ?? "" }));
+          }}
+          onOpen={(id) => commands.find((c) => c.id === id)?.run()}
+          onCreate={() => {}}
+          onClose={() => setCommandsOpen(false)}
+        />
+      )}
       {dbPicker && (
         <SearchPalette
           placeholder="Elegir base de datos…"

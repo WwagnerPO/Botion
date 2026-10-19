@@ -18,6 +18,7 @@ export function applyTheme(theme: Theme) {
   const dark = theme === "dark" || (theme === "system" && media.matches);
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  window.dispatchEvent(new CustomEvent("botion-theme", { detail: theme }));
   try {
     if (theme === "system") localStorage.removeItem(THEME_KEY);
     else localStorage.setItem(THEME_KEY, theme);

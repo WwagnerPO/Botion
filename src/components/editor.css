@@ -185,3 +185,7 @@ svg.botion-icon * {
 .botion-editor img.note-image.ProseMirror-selectednode {
   outline: 2px solid #8b5cf6;
 }
+
+/* Buscar en la nota */
+.botion-editor .find-match { background: rgb(250 204 21 / 0.4); border-radius: 2px; }
+.botion-editor .find-current { background: rgb(249 115 22 / 0.55); }
