@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Backlinks } from "./components/Backlinks";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { DatabaseView } from "./components/DatabaseView";
@@ -10,6 +10,7 @@ import { PropertiesPanel } from "./components/PropertiesPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
+import { linkChecker } from "./lib/wikilink";
 import type { SyncResult } from "./lib/git";
 import {
   columnOptions,
@@ -34,6 +35,7 @@ import {
   deleteEntry,
   getBacklinks,
   getLastVault,
+  onNotesChanged,
   onVaultChanged,
   openVault,
   pickVaultFolder,
@@ -95,12 +97,34 @@ export default function App() {
     ((target: string) => void) | null
   >(null);
 
+  // Qué enlaces [[...]] apuntan a notas que existen, según el árbol.
+  const linkExists = useMemo(() => {
+    const paths: string[] = [];
+    const walk = (nodes: TreeNode[]) =>
+      nodes.forEach((n) => (n.kind === "folder" ? walk(n.children) : paths.push(n.path)));
+    walk(vault?.tree ?? []);
+    return linkChecker(paths);
+  }, [vault?.tree]);
+
+  /** Momento de la última edición en el editor (Milkdown avisa con retraso). */
+  const lastEditAt = useRef(0);
+  const markEdit = useCallback(() => {
+    lastEditAt.current = Date.now();
+  }, []);
+
+  /** Último contenido de la nota abierta que la app leyó o escribió. */
+  const knownContent = useRef<{ path: string; content: string } | null>(null);
   const [autosaver] = useState(
     () =>
-      new Autosaver((s, err) => {
-        setStatus(s);
-        if (err) setError(err);
-      }),
+      new Autosaver(
+        (s, err) => {
+          setStatus(s);
+          if (err) setError(err);
+        },
+        (path, content) => {
+          knownContent.current = { path, content };
+        },
+      ),
   );
   const noteRef = useRef(note);
   noteRef.current = note;
@@ -159,6 +183,35 @@ export default function App() {
     };
   }, [autosaver]);
 
+  // Si la nota abierta cambia desde fuera (otro editor, Git...), se recarga.
+  // Si además hay cambios sin guardar, se mantienen los de Botion.
+  const reloadIfChanged = useRef<(paths: string[]) => void>(() => {});
+  reloadIfChanged.current = async (paths) => {
+    const current = noteRef.current;
+    if (!current || !paths.includes(current.path)) return;
+    let disk: string;
+    try {
+      disk = await readNote(current.path);
+    } catch {
+      return; // Borrada o movida: el árbol ya lo refleja.
+    }
+    const known = knownContent.current;
+    if (known?.path === current.path && known.content === disk) return;
+    const editingNow = Date.now() - lastEditAt.current < 2000;
+    if (autosaver.hasPending(current.path) || editingNow) {
+      setNotice("La nota ha cambiado fuera de Botion; se mantienen tus cambios.");
+      return;
+    }
+    await openNote(current.path, true);
+    setNotice("La nota se ha actualizado con cambios hechos fuera de Botion.");
+  };
+  useEffect(() => {
+    const unlisten = onNotesChanged((paths) => reloadIfChanged.current(paths));
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
   // Cambios hechos desde fuera de la app (otro editor, el explorador...).
   useEffect(() => {
     const unlisten = onVaultChanged((tree) => {
@@ -192,6 +245,7 @@ export default function App() {
         // Si el frontmatter no es válido, la nota se abre sin propiedades.
         getProperties(path).catch(() => ({})),
       ]);
+      knownContent.current = { path, content };
       setNote((prev) => ({
         path,
         ...splitFrontmatter(content),
@@ -251,6 +305,7 @@ export default function App() {
         readNote(current.path),
         getProperties(current.path),
       ]);
+      knownContent.current = { path: current.path, content };
       // El editor sigue igual: solo cambia el frontmatter que se guardará.
       setNote((n) =>
         n && n.path === current.path
@@ -667,7 +722,13 @@ export default function App() {
           </div>
         )}
         {note ? (
-          <div className="flex-1 overflow-y-auto">
+          <div
+            className="flex-1 overflow-y-auto"
+            onKeyDownCapture={markEdit}
+            onBeforeInputCapture={markEdit}
+            onPasteCapture={markEdit}
+            onDropCapture={markEdit}
+          >
             <div className="mx-auto w-full max-w-3xl pt-10">
               <div className="mb-6 flex items-center justify-between px-14 text-xs text-neutral-400">
                 <span className="truncate">{note.path}</span>
@@ -695,6 +756,7 @@ export default function App() {
                 onRequestTemplate={(insert) =>
                   chooseTemplate({ mode: "insert", insert })
                 }
+                linkExists={linkExists}
               />
               <Backlinks
                 backlinks={backlinks}

@@ -63,3 +63,13 @@ svg.botion-icon * {
   fill: none !important;
   stroke: currentColor;
 }
+
+/* Enlaces a notas que aún no existen (se crean al hacer clic). */
+.botion-editor .wikilink.wikilink-missing {
+  color: #a78bfa;
+  text-decoration-style: dashed;
+}
+
+.dark .botion-editor .wikilink.wikilink-missing {
+  color: #8b7fc4;
+}

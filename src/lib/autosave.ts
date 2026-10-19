@@ -13,8 +13,15 @@ export class Autosaver {
 
   constructor(
     private onStatus: (status: SaveStatus, error?: string) => void,
+    /** Se llama con lo que se acaba de escribir en disco. */
+    private onSaved: (path: string, content: string) => void = () => {},
     private delay = 500,
   ) {}
+
+  /** Hay cambios de esta nota esperando a guardarse. */
+  hasPending(path: string) {
+    return this.pending?.path === path;
+  }
 
   schedule(path: string, content: string) {
     if (this.pending && this.pending.path !== path) void this.flush();
@@ -35,6 +42,7 @@ export class Autosaver {
       this.onStatus("saving");
       try {
         await writeNote(job.path, job.content);
+        this.onSaved(job.path, job.content);
         this.onStatus("saved");
       } catch (e) {
         this.onStatus("error", String(e));

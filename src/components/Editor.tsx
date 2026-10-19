@@ -4,7 +4,8 @@ import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./editor.css";
 import { buildBotionMenu } from "../lib/slashCommands";
-import { wikiLink } from "../lib/wikilink";
+import { wikiLink, wikiLinkStatus, wikiLinkStatusKey } from "../lib/wikilink";
+import { editorViewCtx } from "@milkdown/kit/core";
 import { useEffect, useRef } from "react";
 
 interface Props {
@@ -20,6 +21,8 @@ interface Props {
   onCreateDatabase: () => void;
   /** Comando «/Plantilla»: pide elegir una e inserta su Markdown. */
   onRequestTemplate: (insert: (markdown: string) => void) => void;
+  /** Dice si un enlace `[[...]]` apunta a una nota que existe. */
+  linkExists: (target: string) => boolean;
 }
 
 /**
@@ -34,6 +37,7 @@ export function Editor({
   onAddProperty,
   onCreateDatabase,
   onRequestTemplate,
+  linkExists,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
@@ -48,6 +52,9 @@ export function Editor({
   onCreateDatabaseRef.current = onCreateDatabase;
   const onRequestTemplateRef = useRef(onRequestTemplate);
   onRequestTemplateRef.current = onRequestTemplate;
+  const linkExistsRef = useRef(linkExists);
+  linkExistsRef.current = linkExists;
+  const crepeRef = useRef<Crepe | null>(null);
 
   useEffect(() => {
     const crepe = new Crepe({
@@ -92,7 +99,7 @@ export function Editor({
         },
       },
     });
-    crepe.editor.use(wikiLink);
+    crepe.editor.use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
@@ -115,14 +122,24 @@ export function Editor({
     });
     const ready = crepe.create().then(() => {
       baseline = crepe.getMarkdown();
+      crepeRef.current = crepe;
     });
 
     return () => {
+      crepeRef.current = null;
       ready.then(() => crepe.destroy());
     };
     // Solo al montar: el contenido inicial no debe recrear el editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Al cambiar las notas de la bóveda, vuelve a marcar los enlaces rotos.
+  useEffect(() => {
+    crepeRef.current?.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.setMeta(wikiLinkStatusKey, true));
+    });
+  }, [linkExists]);
 
   function handleClick(e: React.MouseEvent) {
     const link = (e.target as HTMLElement).closest<HTMLElement>("[data-wikilink]");
