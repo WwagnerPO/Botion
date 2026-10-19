@@ -284,6 +284,16 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
 4. Revisa el borrador y pulsa **Publish release**.
 
+### macOS: «Botion está dañado y no se puede abrir»
+
+Pasa con las apps descargadas que no tienen certificado de Apple. No está dañada: macOS la bloquea por venir de internet.
+
+1. Mueve `Botion.app` a **Aplicaciones**.
+2. Abre **Terminal** y ejecuta: `xattr -cr /Applications/Botion.app`
+3. Ábrela normalmente.
+
+La app va firmada «ad hoc» (sin certificado): si aun así avisa, clic derecho en Botion → **Abrir** → **Abrir**.
+
 ### Firmar los instaladores (opcional)
 
 Sin firma, Windows (SmartScreen) y macOS (Gatekeeper) avisan la primera vez que se abre la app. Para quitar el aviso hace falta un certificado de pago; el workflow de versiones ya lo usa si se añaden estos secretos en **Settings → Secrets and variables → Actions**:
