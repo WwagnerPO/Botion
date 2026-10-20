@@ -133,13 +133,13 @@ impl Index {
     /// Pone el índice al día con el disco: añade, actualiza o quita notas
     /// comparando fecha y tamaño. Solo lee las notas que han cambiado.
     pub fn sync(&mut self) -> Res<()> {
-        let on_disk = vault::read_tree(&self.root, &self.root)
-            .map(|tree| {
-                let mut notes = Vec::new();
-                vault::flatten(&tree, &mut notes);
-                notes
-            })
-            .unwrap_or_default();
+        // Si no se puede leer la bóveda, se deja el índice como estaba en
+        // lugar de vaciarlo.
+        let Ok(tree) = vault::read_tree(&self.root, &self.root) else {
+            return Ok(());
+        };
+        let mut on_disk = Vec::new();
+        vault::flatten(&tree, &mut on_disk);
 
         let tx = self
             .conn

@@ -61,6 +61,20 @@ describe("fórmulas", () => {
     expect(run('weekday(today())')).toBe(1);
   });
 
+  it("dateBetween no pierde un día con el cambio de hora", () => {
+    // @ts-expect-error sin tipos de Node: process existe al ejecutar las pruebas
+    const env = process.env;
+    const tz = env.TZ;
+    env.TZ = "Europe/Madrid";
+    try {
+      expect(run('dateBetween("2026-03-30", "2026-03-29", "days")')).toBe(1);
+      expect(run('dateBetween("2026-04-05", "2026-03-01", "days")')).toBe(35);
+      expect(run('dateBetween("2026-04-05", "2026-03-01", "weeks")')).toBe(5);
+    } finally {
+      env.TZ = tz;
+    }
+  });
+
   it("errores en español", () => {
     expect(checkFormula("1 +")).toMatch(/incompleta/);
     expect(checkFormula('prop("a"')).toMatch(/Se esperaba/);

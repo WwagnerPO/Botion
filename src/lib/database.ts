@@ -186,6 +186,11 @@ export function setProperty(
   return invoke<void>("set_property", { path, key, value });
 }
 
+/** Propiedades del frontmatter de un texto (sin leer ningún fichero). */
+export function parseProperties(content: string): Promise<Props> {
+  return invoke<Props>("parse_properties", { content });
+}
+
 export function getProperties(path: string): Promise<Props> {
   return invoke<Props>("get_properties", { path });
 }

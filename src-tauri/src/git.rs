@@ -371,9 +371,11 @@ pub fn resolve(root: &Path, strategy: Strategy) -> Result<SyncResult, String> {
         )?;
         let theirs: Vec<&str> = theirs.lines().collect();
         for path in mine.lines().filter(|p| theirs.contains(p)) {
-            if let Ok(content) = git_ok(root, &["show", &format!("@{{upstream}}:./{path}")]) {
+            // Bytes tal cual: puede ser una imagen, y los textos no se recortan.
+            let out = git(root, &["show", &format!("@{{upstream}}:./{path}")])?;
+            if out.status.success() {
                 let copy = copy_name(root, path);
-                fs::write(root.join(&copy), content + "\n")
+                fs::write(root.join(&copy), &out.stdout)
                     .map_err(|e| format!("No se pudo guardar la copia del remoto: {e}"))?;
             }
         }

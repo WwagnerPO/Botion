@@ -231,12 +231,17 @@ function addTo(d: Date, n: number, u: string) {
 
 function between(a: Date, b: Date, u: string) {
   const ms = a.getTime() - b.getTime();
+  // Días y semanas por fecha de calendario: un cambio de hora no resta un día.
+  const days =
+    (Date.UTC(a.getFullYear(), a.getMonth(), a.getDate(), a.getHours(), a.getMinutes()) -
+      Date.UTC(b.getFullYear(), b.getMonth(), b.getDate(), b.getHours(), b.getMinutes())) /
+    864e5;
   const months = (a.getFullYear() - b.getFullYear()) * 12 + a.getMonth() - b.getMonth();
   const value =
     u === "years" ? months / 12
     : u === "months" ? months
-    : u === "weeks" ? ms / 6048e5
-    : u === "days" ? ms / 864e5
+    : u === "weeks" ? days / 7
+    : u === "days" ? days
     : u === "hours" ? ms / 36e5
     : ms / 6e4;
   return Math.trunc(Math.round(value * 1e6) / 1e6);

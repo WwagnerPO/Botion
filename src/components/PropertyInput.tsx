@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, FileText, Mail, Paperclip, Phone, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { fromNote, openInSystem, pickFile, saveAttachment } from "../lib/attachments";
+import { fromNote, openInSystem, pickFile, safeDecode, saveAttachment } from "../lib/attachments";
 import { getDatabase, type Kind, type PropValue, type Row } from "../lib/database";
 import { linkTarget } from "../lib/dbview";
 import { Popover } from "./Popover";
@@ -82,7 +82,7 @@ function openExternal(url: string) {
   openUrl(url).catch(() => window.open(url, "_blank"));
 }
 
-const fileName = (link: string) => decodeURI(link).split("/").pop() ?? link;
+const fileName = (link: string) => safeDecode(link).split("/").pop() ?? link;
 
 /**
  * Valor de una celda para leer (también el de las columnas calculadas):
@@ -307,10 +307,17 @@ export function PropertyInput({
         : String(value);
   const [draft, setDraft] = useState(text);
   const [editing, setEditing] = useState(false);
+  // Escape cancela: el blur que viene después no debe guardar.
+  const cancelled = useRef(false);
   useEffect(() => setDraft(text), [text]);
 
   function commit() {
     setEditing(false);
+    if (cancelled.current) {
+      cancelled.current = false;
+      setDraft(text);
+      return;
+    }
     if (draft === text) return;
     const raw = draft.trim();
     if (raw === "") return onChange(null);
@@ -332,8 +339,7 @@ export function PropertyInput({
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") e.currentTarget.blur();
     if (e.key === "Escape") {
-      setDraft(text);
-      setEditing(false);
+      cancelled.current = true;
       e.currentTarget.blur();
     }
   }

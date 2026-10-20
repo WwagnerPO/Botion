@@ -117,6 +117,142 @@ pub fn move_to(root: &Path, path: &str, folder: &str) -> Result<Renamed, String>
     relocate(root, path, &new_path)
 }
 
+/// Hay en su carpeta una entrada con exactamente ese nombre (con las mismas
+/// mayúsculas), no solo una que el sistema considera igual.
+fn exact_entry_exists(path: &Path) -> bool {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return false;
+    };
+    fs::read_dir(dir).is_ok_and(|entries| entries.flatten().any(|e| e.file_name() == name))
+}
+
+/// Une `dir` y `rel` resolviendo «.» y «..» (rutas de la bóveda con «/»).
+fn join_rel(dir: &str, rel: &str) -> Option<String> {
+    let mut out: Vec<&str> = dir.split('/').filter(|p| !p.is_empty()).collect();
+    for part in rel.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                out.pop()?;
+            }
+            p => out.push(p),
+        }
+    }
+    Some(out.join("/"))
+}
+
+/// Ruta relativa desde la carpeta `dir` hasta el fichero `target`.
+fn relative_to(dir: &str, target: &str) -> String {
+    let from: Vec<&str> = dir.split('/').filter(|p| !p.is_empty()).collect();
+    let to: Vec<&str> = target.split('/').collect();
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    let mut parts = vec![".."; from.len() - common];
+    parts.extend(&to[common..]);
+    parts.join("/")
+}
+
+/// Enlace relativo nuevo para `url` (escrito en una nota de `old_dir`) si la
+/// nota pasa a `new_dir`. `locate` dice dónde está ahora un fichero de la
+/// bóveda que estaba en una ruta, o `None` si no existe.
+fn rebase_url(
+    url: &str,
+    old_dir: &str,
+    new_dir: &str,
+    locate: &impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+    if url.is_empty() || url.starts_with(['#', '/']) || url.split('/').next()?.contains(':') {
+        return None;
+    }
+    let decoded = percent_encoding::percent_decode_str(url)
+        .decode_utf8()
+        .ok()?;
+    let target = locate(&join_rel(old_dir, &decoded)?)?;
+    let new = relative_to(new_dir, &target);
+    (new != decoded).then_some(new)
+}
+
+/// Arregla los enlaces relativos `](ruta)` de una nota (imágenes, adjuntos)
+/// cuando la nota cambia de carpeta. No toca los bloques de código.
+fn rebase_markdown_links(
+    content: &str,
+    old_dir: &str,
+    new_dir: &str,
+    locate: &impl Fn(&str) -> Option<String>,
+) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut in_fence = false;
+    for line in content.split_inclusive('\n') {
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+        }
+        if in_fence || !line.contains("](") {
+            out.push_str(line);
+            continue;
+        }
+        let mut rest = line;
+        while let Some(i) = rest.find("](") {
+            out.push_str(&rest[..i + 2]);
+            rest = &rest[i + 2..];
+            let (url, len, angle) = if let Some(inner) = rest.strip_prefix('<') {
+                match inner.find('>') {
+                    Some(end) => (&inner[..end], end + 2, true),
+                    None => continue,
+                }
+            } else {
+                let end = rest.find([')', ' ', '\t', '\n']).unwrap_or(rest.len());
+                (&rest[..end], end, false)
+            };
+            match rebase_url(url, old_dir, new_dir, locate) {
+                Some(new) if angle || new.contains([' ', '(', ')']) => {
+                    out.push_str(&format!("<{new}>"))
+                }
+                Some(new) => out.push_str(&new),
+                None => out.push_str(&rest[..len]),
+            }
+            rest = &rest[len..];
+        }
+        out.push_str(rest);
+    }
+    out
+}
+
+/// Lo mismo con las propiedades que guardan rutas a ficheros (tipo
+/// Archivos): solo se cambian los textos que apuntan a un fichero existente.
+fn rebase_property_links(
+    content: &str,
+    old_dir: &str,
+    new_dir: &str,
+    locate: &impl Fn(&str) -> Option<String>,
+) -> String {
+    use serde_json::Value;
+    let Ok(props) = crate::props::read(content) else {
+        return content.to_string();
+    };
+    let mut out = content.to_string();
+    for (key, value) in props {
+        let fix = |v: &Value| match v {
+            Value::String(s) => rebase_url(s, old_dir, new_dir, locate).map(Value::String),
+            _ => None,
+        };
+        let new_value = match &value {
+            Value::String(_) => fix(&value),
+            Value::Array(items) if items.iter().any(|v| fix(v).is_some()) => Some(Value::Array(
+                items
+                    .iter()
+                    .map(|v| fix(v).unwrap_or_else(|| v.clone()))
+                    .collect(),
+            )),
+            _ => None,
+        };
+        if let Some(v) = new_value
+            && let Ok(updated) = crate::props::set(&out, &key, Some(v))
+        {
+            out = updated;
+        }
+    }
+    out
+}
+
 /// Cambia la ruta de una nota o carpeta y arregla los enlaces `[[...]]`:
 /// los que apuntaban a lo movido y los que, desde lo movido, dejarían de
 /// apuntar a la misma nota (porque se buscan primero en la misma carpeta).
@@ -134,8 +270,9 @@ fn relocate(root: &Path, path: &str, new_path: &str) -> Result<Renamed, String> 
         });
     }
     let to = vault::resolve(root, &new_path)?;
-    // Permite cambiar solo mayúsculas/minúsculas en sistemas que no las distinguen.
-    if to.exists() && new_path.to_lowercase() != path.to_lowercase() {
+    // Permite cambiar solo mayúsculas/minúsculas en sistemas que no las
+    // distinguen; si existe otra entrada con ese nombre exacto (Linux), no.
+    if to.exists() && (new_path.to_lowercase() != path.to_lowercase() || exact_entry_exists(&to)) {
         return Err("Ya existe una nota o carpeta con ese nombre".into());
     }
 
@@ -186,6 +323,25 @@ fn relocate(root: &Path, path: &str, new_path: &str) -> Result<Renamed, String> 
             };
             (replacement != target).then(|| replacement.to_string())
         });
+        // Las notas movidas a otra carpeta conservan sus imágenes y adjuntos.
+        let mut updated = updated;
+        if let Some(old_note) = old_path_of.get(note.as_str()) {
+            let (old_dir, new_dir) = (folder_of(old_note), folder_of(note));
+            if old_dir != new_dir {
+                let locate = |old: &str| {
+                    // Un fichero que estaba dentro de lo movido también se ha movido.
+                    let now = if is_dir {
+                        old.strip_prefix(&format!("{path}/"))
+                            .map_or_else(|| old.to_string(), |rest| format!("{new_path}/{rest}"))
+                    } else {
+                        old.to_string()
+                    };
+                    root.join(&now).is_file().then_some(now)
+                };
+                updated = rebase_markdown_links(&updated, old_dir, new_dir, &locate);
+                updated = rebase_property_links(&updated, old_dir, new_dir, &locate);
+            }
+        }
         if updated != content {
             write_atomic(&root.join(note), &updated)
                 .map_err(|e| format!("No se pudieron actualizar los enlaces de {note}: {e}"))?;
@@ -197,6 +353,10 @@ fn relocate(root: &Path, path: &str, new_path: &str) -> Result<Renamed, String> 
         path: new_path,
         updated_notes,
     })
+}
+
+fn folder_of(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(dir, _)| dir)
 }
 
 #[tauri::command(async)]
@@ -345,6 +505,51 @@ mod tests {
             read(root, "Archivo/Plan.md"),
             "Ver [[Proyectos/Ideas]] y [[Inicio]].\n"
         );
+    }
+
+    #[test]
+    fn mover_nota_conserva_imagenes_y_adjuntos() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(
+            root,
+            "Inicio.md",
+            "---\narchivos: [\"adjuntos/informe.pdf\"]\nweb: \"https://x.com/a\"\n---\n\n![foto](adjuntos/foto.png) y ![otra](<adjuntos/mi foto.png>)\n[web](https://x.com) [falta](adjuntos/no.png)\n\n```\n![código](adjuntos/foto.png)\n```\n",
+        );
+        write(root, "adjuntos/foto.png", "x");
+        write(root, "adjuntos/mi foto.png", "x");
+        write(root, "adjuntos/informe.pdf", "x");
+        fs::create_dir(root.join("Proyectos")).unwrap();
+
+        move_to(root, "Inicio.md", "Proyectos").unwrap();
+        let moved = read(root, "Proyectos/Inicio.md");
+        assert!(moved.contains("![foto](../adjuntos/foto.png)"), "{moved}");
+        assert!(
+            moved.contains("![otra](<../adjuntos/mi foto.png>)"),
+            "{moved}"
+        );
+        assert!(
+            moved.contains("[web](https://x.com) [falta](adjuntos/no.png)"),
+            "{moved}"
+        );
+        assert!(moved.contains("![código](adjuntos/foto.png)"), "{moved}");
+        assert!(moved.contains("../adjuntos/informe.pdf"), "{moved}");
+        assert!(moved.contains("https://x.com/a"), "{moved}");
+
+        // Y al volver, otra vez como al principio.
+        move_to(root, "Proyectos/Inicio.md", "").unwrap();
+        assert!(read(root, "Inicio.md").contains("![foto](adjuntos/foto.png)"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn cambiar_mayusculas_no_pisa_otra_nota() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "nota.md", "una");
+        write(root, "Nota.md", "otra");
+        assert!(rename(root, "nota.md", "Nota").is_err());
+        assert_eq!(read(root, "Nota.md"), "otra");
     }
 
     #[test]

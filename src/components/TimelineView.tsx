@@ -70,8 +70,12 @@ export function TimelineView({ db, view, rows, ctx, onPeek, onChangeValue }: Vie
       if (!moved) return mode === "move" && onPeek(row.path);
       if (delta === 0) return;
       if (mode === "move") {
-        onChangeValue(row.path, start!.name, iso(addDays(s, delta)));
-        if (canResize && end && e.getTime() !== s.getTime()) onChangeValue(row.path, end.name, iso(addDays(e, delta)));
+        // Una tras otra: las dos escriben en la misma nota.
+        const moveBoth = async () => {
+          await onChangeValue(row.path, start!.name, iso(addDays(s, delta)));
+          if (canResize && end && e.getTime() !== s.getTime()) await onChangeValue(row.path, end.name, iso(addDays(e, delta)));
+        };
+        void moveBoth();
       } else {
         const ne = addDays(e, delta);
         onChangeValue(row.path, end!.name, iso(ne < s ? s : ne));
