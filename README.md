@@ -46,7 +46,7 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | Diagrama | bloque de código `mermaid`, con vista previa |
 | Imagen | `![texto](adjuntos/foto.png)` |
 | Vídeo, audio o archivo | `![[adjuntos/clip.mp4]]` (se reproduce o se abre con su programa) |
-| YouTube | `![YouTube](https://youtu.be/…)` |
+| YouTube | `![YouTube](https://youtu.be/…)` (miniatura; se abre en el navegador) |
 | Icono y portada | `icono: 🚀` y `portada: violeta` en el frontmatter |
 
 ### Atajos
@@ -283,6 +283,16 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 2. Crea y sube una etiqueta (`git tag v0.2.0 && git push origin v0.2.0`) o lanza a mano el workflow «Versión» en **Actions**.
 3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
 4. Revisa el borrador y pulsa **Publish release**.
+
+### macOS: «Botion está dañado y no se puede abrir»
+
+Pasa con las apps descargadas que no tienen certificado de Apple. No está dañada: macOS la bloquea por venir de internet.
+
+1. Mueve `Botion.app` a **Aplicaciones**.
+2. Abre **Terminal** y ejecuta: `xattr -cr /Applications/Botion.app`
+3. Ábrela normalmente.
+
+La app va firmada «ad hoc» (sin certificado): si aun así avisa, clic derecho en Botion → **Abrir** → **Abrir**.
 
 ### Firmar los instaladores (opcional)
 

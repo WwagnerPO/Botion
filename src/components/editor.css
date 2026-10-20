@@ -324,14 +324,43 @@ svg.botion-icon * {
 .dark .botion-editor .embed-file button:hover { background: rgb(255 255 255 / 0.08); }
 .botion-editor .embed-label { display: inline-flex; align-items: center; gap: 0.3rem; }
 
-/* Vídeos de YouTube ![](https://youtube.com/…) */
-.botion-editor .youtube-embed {
+/* Vídeos de YouTube ![](https://youtube.com/…): miniatura que abre el navegador. */
+.botion-editor .youtube-card {
+  position: relative;
   display: block;
   width: 100%;
+  max-width: 640px;
   aspect-ratio: 16 / 9;
-  border: 0;
+  overflow: hidden;
   border-radius: 8px;
   background: #000;
+  cursor: pointer;
+}
+.botion-editor .youtube-card img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+.botion-editor .youtube-card:hover img { opacity: 1; }
+.botion-editor .youtube-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 68px;
+  height: 48px;
+  place-items: center;
+  border-radius: 12px;
+  background: #ff0033;
+  color: #fff;
+  font-size: 20px;
+  transform: translate(-50%, -50%);
+}
+.botion-editor .youtube-label {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.7);
+  padding: 2px 8px;
+  color: #fff;
+  font-size: 12px;
 }
 
 /* Texto de la nota en la vista rápida de una base de datos. */
