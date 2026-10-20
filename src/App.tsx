@@ -47,6 +47,7 @@ import {
   createDatabase,
   getDatabase,
   getProperties,
+  parseProperties,
   setProperty,
   type Kind,
   type PropValue,
@@ -173,6 +174,14 @@ export default function App() {
         },
       ),
   );
+  /** Pide al editor el texto que aún no ha avisado (Milkdown va con retraso). */
+  const editorFlush = useRef<(() => void) | null>(null);
+  const splitFlush = useRef<(() => Promise<void>) | null>(null);
+  /** Guarda ya todo lo pendiente de la nota abierta. */
+  const flushEdits = useCallback(() => {
+    editorFlush.current?.();
+    return autosaver.flush();
+  }, [autosaver]);
   const noteRef = useRef(note);
   noteRef.current = note;
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -214,13 +223,18 @@ export default function App() {
   const loadVault = useCallback(
     async (path: string) => {
       const request = ++loadRequest.current;
-      await autosaver.flush();
+      await flushEdits();
+      // El panel derecho escribe en la bóveda abierta: se guarda antes de cambiar.
+      await splitFlush.current?.();
       try {
         const v = await openVault(path);
         if (request !== loadRequest.current) return;
         setVault(v);
         setNote(null);
         setDatabase(null);
+        setTabs([]);
+        setActiveTab(0);
+        setSplit(null);
         setError(null);
         setLastVault(v.root);
       } catch (e) {
@@ -229,7 +243,7 @@ export default function App() {
         setLastVault(null);
       }
     },
-    [autosaver],
+    [flushEdits],
   );
 
   useEffect(() => {
@@ -239,13 +253,14 @@ export default function App() {
 
   // Antes de cerrar la ventana, guarda lo que quede pendiente.
   useEffect(() => {
-    const unlisten = getCurrentWindow().onCloseRequested(() =>
-      autosaver.flush(),
-    );
+    const unlisten = getCurrentWindow().onCloseRequested(async () => {
+      await flushEdits();
+      await splitFlush.current?.();
+    });
     return () => {
       unlisten.then((f) => f());
     };
-  }, [autosaver]);
+  }, [flushEdits]);
 
   // Si la nota abierta cambia desde fuera (otro editor, Git...), se recarga.
   // Si además hay cambios sin guardar, se mantienen los de Botion.
@@ -301,7 +316,7 @@ export default function App() {
   async function openNote(path: string, force = false) {
     if (!force && path === noteRef.current?.path) return;
     // Guarda antes de leer, para que los backlinks vean los últimos cambios.
-    await autosaver.flush();
+    await flushEdits();
     try {
       const [content, links, noteProps] = await Promise.all([
         readNote(path),
@@ -355,7 +370,7 @@ export default function App() {
   }
 
   async function openDatabase(path: string) {
-    await autosaver.flush();
+    await flushEdits();
     setNote(null);
     setDatabase(path);
     setError(null);
@@ -367,7 +382,7 @@ export default function App() {
     if (!current) return;
     await run(async () => {
       // Primero se guarda el texto pendiente, para no pisar el cambio.
-      await autosaver.flush();
+      await flushEdits();
       await setProperty(current.path, key, value);
       const [content, noteProps] = await Promise.all([
         readNote(current.path),
@@ -455,8 +470,9 @@ export default function App() {
       const title = current.path.split("/").pop()!.replace(/\.md$/, "");
       const content = applyVariables(await readNote(templatePath), { title });
       insert(splitFrontmatter(content).body);
-      // Solo las propiedades que la nota aún no tiene.
-      const templateProps = await getProperties(templatePath).catch(() => ({}));
+      // Solo las propiedades que la nota aún no tiene. Se leen ya con las
+      // variables sustituidas: «fecha: {{fecha}}» no es YAML válido.
+      const templateProps = await parseProperties(content).catch(() => ({}));
       for (const [key, value] of Object.entries(templateProps)) {
         if (key in props) continue;
         await changeProperty(
@@ -486,7 +502,11 @@ export default function App() {
     });
   }
 
-  const beforeSync = useCallback(() => autosaver.flush(), [autosaver]);
+  const syncStartedAt = useRef(0);
+  const beforeSync = useCallback(() => {
+    syncStartedAt.current = Date.now();
+    return flushEdits();
+  }, [flushEdits]);
 
   /** Tras sincronizar: recarga lo que haya cambiado al bajar del remoto. */
   async function handleSynced(result: SyncResult, message: string) {
@@ -497,6 +517,14 @@ export default function App() {
     setDbReloadKey((k) => k + 1);
     const current = noteRef.current;
     if (current && result.changed.includes(current.path)) {
+      // Si se escribió durante la sincronización, no se pisa lo escrito:
+      // la versión del otro ordenador queda en el historial.
+      if (lastEditAt.current > syncStartedAt.current || autosaver.hasPending(current.path)) {
+        setNotice(
+          "La nota abierta cambió en el otro ordenador mientras escribías; se mantienen tus cambios (la otra versión está en el historial).",
+        );
+        return;
+      }
       await openNote(current.path, true);
     }
   }
@@ -540,7 +568,7 @@ export default function App() {
   async function exportNote(format: "html" | "pdf") {
     const current = noteRef.current;
     if (!current || !vault) return;
-    await autosaver.flush();
+    await flushEdits();
     if (format === "pdf") {
       await printNote();
       return;
@@ -597,7 +625,7 @@ export default function App() {
   /** Abre la nota de un enlace `[[...]]`, creándola si aún no existe. */
   async function handleOpenLink(target: string) {
     if (!note) return;
-    await autosaver.flush();
+    await flushEdits();
     try {
       let path = await resolveNoteLink(target, note.path);
       if (!path) {
@@ -673,7 +701,7 @@ export default function App() {
       confirm: "Renombrar",
       onConfirm: (name) =>
         run(async () => {
-          await autosaver.flush();
+          await flushEdits();
           await afterRelocate(node.path, await renameEntry(node.path, name));
         }),
     });
@@ -708,7 +736,7 @@ export default function App() {
     const parent = path.split("/").slice(0, -1).join("/");
     if (parent === folder || folder === path) return;
     run(async () => {
-      await autosaver.flush();
+      await flushEdits();
       await afterRelocate(path, await moveEntry(path, folder));
     });
   }
@@ -725,7 +753,7 @@ export default function App() {
       danger: true,
       onConfirm: () =>
         run(async () => {
-          await autosaver.flush();
+          await flushEdits();
           await deleteEntry(node.path);
           forgetPaths(node.path);
           if (noteRef.current && isInside(noteRef.current.path, node.path)) {
@@ -908,7 +936,7 @@ export default function App() {
     setTabs(next);
     if (next.length === 0) {
       setActiveTab(0);
-      autosaver.flush().then(() => {
+      flushEdits().then(() => {
         setNote(null);
         setDatabase(null);
       });
@@ -944,7 +972,9 @@ export default function App() {
 
   function forgetPaths(removed: string) {
     const keep = (p: string) => !isInside(p, removed);
-    setTabs((ts) => ts.filter((t) => keep(t.path)));
+    const next = tabs.filter((t) => keep(t.path));
+    setTabs(next);
+    setActiveTab((a) => Math.max(0, Math.min(a - tabs.slice(0, a).filter((t) => !keep(t.path)).length, next.length - 1)));
     setFavorites((f) => f.filter(keep));
     setRecents((r) => r.filter(keep));
     setSplit((s) => (s && keep(s) ? s : null));
@@ -1172,6 +1202,7 @@ export default function App() {
               <Editor
                 key={`${note.path}#${note.version}`}
                 initialValue={note.body}
+                flushRef={editorFlush}
                 onChange={handleChange}
                 onOpenLink={handleOpenLink}
                 onRequestLink={(insert) => setLinkRequest(() => insert)}
@@ -1290,6 +1321,7 @@ export default function App() {
                 openNote(path);
               }}
               onError={showError}
+              flushRef={splitFlush}
             />
           )}
         </div>
@@ -1308,10 +1340,10 @@ export default function App() {
         <HistoryPanel
           path={note.path}
           onClose={closeHistory}
-          beforeSave={() => autosaver.flush()}
+          beforeSave={() => flushEdits()}
           onError={showError}
           onRestore={async (content) => {
-            await autosaver.flush();
+            await flushEdits();
             await writeNote(note.path, content);
             await openNote(note.path, true);
             setNotice("Versión restaurada. La anterior sigue en el historial.");

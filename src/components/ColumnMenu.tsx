@@ -67,7 +67,16 @@ export function ColumnMenu({
     : undefined;
 
   return (
-    <Popover anchor={anchor} onClose={() => (renameNow(), onClose())} className="w-72 p-1.5">
+    <Popover
+      anchor={anchor}
+      onClose={() => {
+        // Lo escrito en la fórmula no se pierde al cerrar con Escape o clic fuera.
+        if (column?.kind === "formula" && formula !== (column.formula ?? "")) onChange({ ...column, formula });
+        renameNow();
+        onClose();
+      }}
+      className="w-72 p-1.5"
+    >
       {column && (
         <div className="space-y-2 border-b border-neutral-200 p-1.5 pb-3 dark:border-neutral-700">
           <input

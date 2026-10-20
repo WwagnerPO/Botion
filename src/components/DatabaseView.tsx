@@ -128,10 +128,13 @@ export function DatabaseView({
 
   async function changeValue(rowPath: string, column: string, value: PropValue) {
     // Se ve el cambio al momento; si falla, se recarga lo que hay en disco.
-    setDb({
-      ...database,
-      rows: database.rows.map((r) => (r.path === rowPath ? { ...r, props: { ...r.props, [column]: value } } : r)),
-    });
+    // Sobre el estado más reciente: puede haber varios cambios seguidos.
+    setDb((prev) =>
+      prev && {
+        ...prev,
+        rows: prev.rows.map((r) => (r.path === rowPath ? { ...r, props: { ...r.props, [column]: value } } : r)),
+      },
+    );
     try {
       await setProperty(rowPath, column, value);
     } catch (e) {

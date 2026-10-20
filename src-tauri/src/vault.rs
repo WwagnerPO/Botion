@@ -101,7 +101,9 @@ pub fn read_tree(root: &Path, dir: &Path) -> std::io::Result<Vec<TreeNode>> {
         if file_type.is_dir() {
             folders.push(TreeNode::Folder {
                 database: crate::database::is_database(&path),
-                children: read_tree(root, &path)?,
+                // Una subcarpeta sin permiso se ve vacía en vez de impedir
+                // abrir toda la bóveda.
+                children: read_tree(root, &path).unwrap_or_default(),
                 path: relative(root, &path),
                 name,
             });

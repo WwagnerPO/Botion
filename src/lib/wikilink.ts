@@ -51,8 +51,12 @@ function remarkWikiLink(this: {
   const data = this.data();
   (data.toMarkdownExtensions ??= []).push({
     handlers: {
-      wikiLink: (node: MdNode) =>
-        `[[${node.target}${node.alias ? `|${node.alias}` : ""}]]`,
+      // En una celda de tabla el «|» separa columnas: se escribe «\|»,
+      // como en Obsidian.
+      wikiLink: (node: MdNode, _parent: unknown, state: { stack: string[] }) => {
+        const bar = state.stack.includes("tableCell") ? "\\|" : "|";
+        return `[[${node.target}${node.alias ? `${bar}${node.alias}` : ""}]]`;
+      },
     },
   });
   return (tree: MdNode) => transform(tree);

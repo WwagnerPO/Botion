@@ -18,7 +18,7 @@ export interface ViewProps {
   onOpenLink: (target: string) => void;
   /** Abre la nota en el panel lateral. */
   onPeek: (path: string) => void;
-  onChangeValue: (rowPath: string, column: string, value: PropValue) => void;
+  onChangeValue: (rowPath: string, column: string, value: PropValue) => void | Promise<void>;
   onNewRow: (preset: Props) => void;
   onUpdateView: (patch: Partial<ViewConfig>) => void;
 }

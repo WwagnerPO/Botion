@@ -32,6 +32,7 @@ pub fn run() {
             database::create_database,
             database::set_property,
             database::get_properties,
+            database::parse_properties,
             database::rename_database_property,
             database::delete_database_property,
             git::git_status,

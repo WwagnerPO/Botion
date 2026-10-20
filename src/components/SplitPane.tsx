@@ -4,7 +4,7 @@ import { joinFrontmatter, splitFrontmatter } from "../lib/frontmatter";
 import { readNote, writeNote } from "../lib/vault";
 import { Editor, type EditorProps } from "./Editor";
 
-type Shared = Omit<EditorProps, "initialValue" | "onChange" | "notePath" | "findOpen" | "onCloseFind">;
+type Shared = Omit<EditorProps, "initialValue" | "onChange" | "notePath" | "findOpen" | "onCloseFind" | "flushRef">;
 
 interface Props {
   path: string;
@@ -14,28 +14,27 @@ interface Props {
   /** Abrir esta nota en el panel principal. */
   onOpenMain: (path: string) => void;
   onError: (message: string) => void;
+  /** Aquí se deja el guardado inmediato, para llamarlo desde fuera. */
+  flushRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
 /**
  * Segunda nota a la derecha, para verlas lado a lado. Tiene su propio
  * guardado automático; las propiedades se editan en el panel principal.
  */
-export function SplitPane({ path, icon, editorProps, onClose, onOpenMain, onError }: Props) {
+export function SplitPane({ path, icon, editorProps, onClose, onOpenMain, onError, flushRef: outerFlush }: Props) {
   const [note, setNote] = useState<{ frontmatter: string; body: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const pending = useRef<{ body: string; timer: number } | null>(null);
-  const frontmatter = useRef("");
+  // Cada cambio pendiente recuerda su nota: si se cambia de nota antes de
+  // guardar, se escribe en la que se estaba editando.
+  const pending = useRef<{ path: string; body: string; timer: number } | null>(null);
+  const editorFlush = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let current = true;
     setNote(null);
     readNote(path)
-      .then((content) => {
-        if (!current) return;
-        const parts = splitFrontmatter(content);
-        frontmatter.current = parts.frontmatter;
-        setNote(parts);
-      })
+      .then((content) => current && setNote(splitFrontmatter(content)))
       .catch((e) => onError(String(e)));
     return () => {
       current = false;
@@ -43,12 +42,15 @@ export function SplitPane({ path, icon, editorProps, onClose, onOpenMain, onErro
   }, [path, onError]);
 
   const flush = async () => {
+    editorFlush.current?.();
     const p = pending.current;
     if (!p) return;
     pending.current = null;
     window.clearTimeout(p.timer);
     try {
-      await writeNote(path, joinFrontmatter(frontmatter.current, p.body));
+      // Las propiedades se editan en otro sitio: se conservan las del disco.
+      const { frontmatter } = splitFrontmatter(await readNote(p.path));
+      await writeNote(p.path, joinFrontmatter(frontmatter, p.body));
     } catch (e) {
       onError(String(e));
     } finally {
@@ -57,6 +59,13 @@ export function SplitPane({ path, icon, editorProps, onClose, onOpenMain, onErro
   };
   const flushRef = useRef(flush);
   flushRef.current = flush;
+  useEffect(() => {
+    if (!outerFlush) return;
+    outerFlush.current = () => flushRef.current();
+    return () => {
+      outerFlush.current = null;
+    };
+  }, [outerFlush]);
   // Al cerrar el panel o cambiar de nota se guarda lo que quede.
   useEffect(() => () => void flushRef.current(), [path]);
 
@@ -96,12 +105,13 @@ export function SplitPane({ path, icon, editorProps, onClose, onOpenMain, onErro
             {...editorProps}
             initialValue={note.body}
             notePath={path}
+            flushRef={editorFlush}
             findOpen={false}
             onCloseFind={() => {}}
             onChange={(body) => {
               setSaving(true);
               if (pending.current) window.clearTimeout(pending.current.timer);
-              pending.current = { body, timer: window.setTimeout(() => void flushRef.current(), 600) };
+              pending.current = { path, body, timer: window.setTimeout(() => void flushRef.current(), 600) };
             }}
           />
         )}

@@ -14,6 +14,15 @@ export async function saveAttachment(notePath: string, file: File): Promise<stri
   });
 }
 
+/** `decodeURI` que no falla con un «%» suelto en el nombre. */
+export function safeDecode(url: string) {
+  try {
+    return decodeURI(url);
+  } catch {
+    return url;
+  }
+}
+
 /** Une rutas con «/» resolviendo «..» y «.». */
 export function joinPath(...parts: string[]) {
   const out: string[] = [];
@@ -31,7 +40,7 @@ export function joinPath(...parts: string[]) {
 export function displayUrl(url: string, vaultRoot: string, notePath: string) {
   if (/^(https?:|data:|blob:|asset:)/i.test(url)) return url;
   const folder = notePath.split("/").slice(0, -1).join("/");
-  const relative = joinPath(folder, decodeURI(url));
+  const relative = joinPath(folder, safeDecode(url));
   // La raíz es una ruta del sistema (en Windows con «C:\»): se respeta tal cual.
   const root = vaultRoot.replace(/[\\/]+$/, "");
   const sep = root.includes("\\") ? "\\" : "/";
@@ -93,7 +102,7 @@ export function attachmentPath(target: string) {
 
 /** Enlace relativo que devuelve `saveAttachment` → ruta en la bóveda. */
 export function linkToVaultPath(link: string) {
-  return `adjuntos/${decodeURI(link).split("/").pop()}`;
+  return `adjuntos/${safeDecode(link).split("/").pop()}`;
 }
 
 /** Identificador de un vídeo de YouTube, o `null`. */
@@ -108,5 +117,5 @@ export function youtubeId(url: string) {
 /** Ruta en la bóveda de un enlace relativo guardado en una nota. */
 export function fromNote(notePath: string, link: string) {
   if (/^[a-z]+:/i.test(link)) return link;
-  return joinPath(notePath.split("/").slice(0, -1).join("/"), decodeURI(link));
+  return joinPath(notePath.split("/").slice(0, -1).join("/"), safeDecode(link));
 }

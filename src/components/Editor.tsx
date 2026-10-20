@@ -74,6 +74,8 @@ export interface EditorProps {
   onRequestUrl: (title: string, insert: (url: string) => void) => void;
   /** Al escribir «@»: pide una nota o fecha para mencionar. */
   onRequestMention: (insert: (mention: Mention) => void) => void;
+  /** Aquí se deja una función que avisa ya del texto pendiente. */
+  flushRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 /**
@@ -103,6 +105,7 @@ export function Editor({
   onAddCover,
   onRequestUrl,
   onRequestMention,
+  flushRef,
 }: EditorProps) {
   const [blockMenu, setBlockMenu] = useState<{ anchor: HTMLElement; pos: number } | null>(null);
   const [emojiPicker, setEmojiPicker] = useState<{
@@ -369,22 +372,28 @@ export function Editor({
     });
 
     // Milkdown normaliza la nota al cargarla; solo se avisa de cambios
-    // reales respecto a esa versión, para no reescribir notas sin tocarlas.
-    let baseline: string | null = null;
+    // reales respecto a lo último avisado (también si se vuelve al texto
+    // del principio), para no reescribir notas sin tocarlas.
+    let last: string | null = null;
+    const emit = (markdown: string) => {
+      if (last === null || markdown === last) return;
+      last = markdown;
+      onChangeRef.current(markdown);
+    };
     crepe.on((listener) => {
-      listener.markdownUpdated((_ctx, markdown) => {
-        if (baseline !== null && markdown !== baseline) {
-          onChangeRef.current(markdown);
-        }
-      });
+      listener.markdownUpdated((_ctx, markdown) => emit(markdown));
     });
     const ready = crepe.create().then(() => {
-      baseline = crepe.getMarkdown();
+      last = crepe.getMarkdown();
       crepeRef.current = crepe;
+      // Milkdown avisa de los cambios con retraso: así se puede pedir el
+      // texto actual antes de cambiar de nota o cerrar.
+      if (flushRef) flushRef.current = () => emit(crepe.getMarkdown());
     });
 
     return () => {
       crepeRef.current = null;
+      if (flushRef) flushRef.current = null;
       ready.then(() => crepe.destroy());
     };
     // Solo al montar: el contenido inicial no debe recrear el editor.

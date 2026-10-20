@@ -69,6 +69,8 @@ export function SearchPalette({
 }: Props) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
+  /** Consulta a la que corresponden `hits` (la búsqueda va con retraso). */
+  const [hitsFor, setHitsFor] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -83,6 +85,7 @@ export function SearchPalette({
         .then((result) => {
           if (current) {
             setHits(result);
+            setHitsFor(query);
             setActive(0);
           }
         })
@@ -123,6 +126,22 @@ export function SearchPalette({
       setActive((a) => Math.max(a - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
+      // Si aún no han llegado los resultados de lo escrito, se buscan ya
+      // en lugar de abrir uno de la consulta anterior.
+      if (hitsFor !== query) {
+        source(query)
+          .then((result) =>
+            choose(
+              result[0]
+                ? { kind: "hit", hit: result[0] }
+                : allowCreate && name
+                  ? { kind: "create", name }
+                  : undefined,
+            ),
+          )
+          .catch(() => {});
+        return;
+      }
       choose(items[active]);
     } else if (e.key === "Escape") {
       onClose();

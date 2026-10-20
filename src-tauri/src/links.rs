@@ -124,7 +124,8 @@ fn folder(path: &str) -> &str {
 /// Sin distinguir mayúsculas. Si hay varias, gana la de la misma carpeta
 /// que `from` y después la de ruta más corta.
 pub fn resolve_link<'a>(target: &str, from: &str, notes: &'a [String]) -> Option<&'a str> {
-    let target = target.trim().trim_end_matches(".md").to_lowercase();
+    // `[[Nota#Sección]]` y `[[Nota|texto]]` apuntan a «Nota».
+    let target = link_target(target).trim_end_matches(".md").to_lowercase();
     if target.is_empty() {
         return None;
     }
@@ -189,6 +190,20 @@ mod tests {
         ]
         .map(String::from)
         .to_vec()
+    }
+
+    #[test]
+    fn resuelve_enlaces_con_seccion_o_alias() {
+        let notes = vec!["Ideas.md".to_string(), "Otra.md".to_string()];
+        assert_eq!(
+            resolve_link("Ideas#Plan", "Otra.md", &notes),
+            Some("Ideas.md")
+        );
+        assert_eq!(
+            resolve_link("ideas|mis ideas", "Otra.md", &notes),
+            Some("Ideas.md")
+        );
+        assert_eq!(resolve_link("#Plan", "Otra.md", &notes), None);
     }
 
     #[test]

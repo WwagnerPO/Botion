@@ -431,21 +431,42 @@ fn update_rows(
     root: &Path,
     folder: &str,
     mut f: impl FnMut(&str) -> Result<Option<String>, String>,
-) -> Result<Vec<String>, String> {
+) -> Result<(Vec<String>, Vec<String>), String> {
     let mut changed = Vec::new();
+    let mut failed = Vec::new();
     let subfolders = read_config(&vault::resolve_dir(root, folder)?).subfolders;
+    // Si una nota falla se sigue con las demás, para no dejar el cambio a
+    // medias, y se avisa al final de cuáles no se pudieron tocar.
     for path in row_paths(root, folder, subfolders)? {
         let file = root.join(&path);
-        let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
+        let Ok(content) = fs::read_to_string(&file) else {
+            failed.push(path);
+            continue;
+        };
         // Las notas con frontmatter no válido se dejan como están.
         if let Ok(Some(updated)) = f(&content)
             && updated != content
         {
-            write_atomic(&file, &updated).map_err(|e| format!("No se pudo guardar {path}: {e}"))?;
-            changed.push(path);
+            if write_atomic(&file, &updated).is_ok() {
+                changed.push(path);
+            } else {
+                failed.push(path);
+            }
         }
     }
-    Ok(changed)
+    Ok((changed, failed))
+}
+
+/// Error con las notas que no se pudieron cambiar, si hay alguna.
+fn report(failed: Vec<String>) -> Result<(), String> {
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "No se pudieron cambiar estas notas: {}",
+            failed.join(", ")
+        ))
+    }
 }
 
 pub fn rename_property(root: &Path, folder: &str, old: &str, new: &str) -> Result<(), String> {
@@ -455,20 +476,21 @@ pub fn rename_property(root: &Path, folder: &str, old: &str, new: &str) -> Resul
     if old != new && config.columns.iter().any(|c| c.name == new) {
         return Err(format!("Ya existe la propiedad «{new}»"));
     }
-    update_rows(root, folder, |c| props::rename(c, old, new))?;
+    let (_, failed) = update_rows(root, folder, |c| props::rename(c, old, new))?;
     for col in &mut config.columns {
         if col.name == old {
             col.name = new.to_string();
         }
     }
     config.rename_refs(old, Some(new));
-    write_config(&dir, &config)
+    write_config(&dir, &config)?;
+    report(failed)
 }
 
 pub fn delete_property(root: &Path, folder: &str, key: &str) -> Result<(), String> {
     let dir = vault::resolve_dir(root, folder)?;
     let mut config = read_config(&dir);
-    update_rows(root, folder, |c| {
+    let (_, failed) = update_rows(root, folder, |c| {
         if props::read(c)?.contains_key(key) {
             props::set(c, key, None).map(Some)
         } else {
@@ -477,7 +499,8 @@ pub fn delete_property(root: &Path, folder: &str, key: &str) -> Result<(), Strin
     })?;
     config.columns.retain(|c| c.name != key);
     config.rename_refs(key, None);
-    write_config(&dir, &config)
+    write_config(&dir, &config)?;
+    report(failed)
 }
 
 fn sync_index(state: &VaultState) -> Result<(), String> {
@@ -533,6 +556,13 @@ pub fn set_property(
     let updated = props::set(&content, key, value)?;
     write_atomic(&file, &updated).map_err(|e| format!("No se pudo guardar la nota: {e}"))?;
     crate::index::with_index(&state, |i| i.update(&path))
+}
+
+/// Propiedades de un texto con frontmatter (p. ej. una plantilla ya con las
+/// variables sustituidas).
+#[tauri::command]
+pub fn parse_properties(content: String) -> Result<Props, String> {
+    props::read(&content)
 }
 
 /// Propiedades de una nota, para el panel de encima del editor.

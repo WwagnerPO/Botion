@@ -9,7 +9,7 @@ import {
   calloutTitleSchema,
   type CalloutType,
 } from "./callout";
-import { youtubeId } from "./attachments";
+import { safeDecode, youtubeId } from "./attachments";
 import type { Mention } from "./blocks";
 import { embedSchema } from "./embed";
 import { highlightSchema } from "./highlight";
@@ -250,7 +250,7 @@ export function buildBotionMenu(handlers: SlashHandlers) {
         clearSlash(ctx);
         handlers.pickAttachment("image/*").then((src) => {
           if (!src) return;
-          insertImage(ctx, src, decodeURI(src).split("/").pop()!.replace(/\.[^.]+$/, ""));
+          insertImage(ctx, src, safeDecode(src).split("/").pop()!.replace(/\.[^.]+$/, ""));
         });
       },
     });
@@ -268,7 +268,7 @@ export function buildBotionMenu(handlers: SlashHandlers) {
         onRun: (ctx) => {
           clearSlash(ctx);
           handlers.pickAttachment(a.accept).then((link) => {
-            if (link) insertEmbed(ctx, `adjuntos/${decodeURI(link).split("/").pop()}`);
+            if (link) insertEmbed(ctx, `adjuntos/${safeDecode(link).split("/").pop()}`);
           });
         },
       });
