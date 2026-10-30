@@ -93,6 +93,7 @@ pub enum View {
     Gallery,
     List,
     Timeline,
+    Chart,
 }
 
 impl View {
@@ -104,6 +105,7 @@ impl View {
             View::Gallery => "Galería",
             View::List => "Lista",
             View::Timeline => "Cronograma",
+            View::Chart => "Gráfico",
         }
     }
 }
@@ -115,6 +117,43 @@ pub struct Filter {
     pub op: String,
     #[serde(default)]
     pub value: Value,
+}
+
+/// Gráfico de una vista: barras, líneas o tarta.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Chart {
+    /// `bar`, `line` o `pie`.
+    pub kind: String,
+    /// Columna de las categorías (eje X o porciones).
+    pub x: Option<String>,
+    /// Columna numérica que se resume (sin ella, se cuentan filas).
+    pub y: Option<String>,
+    /// `count`, `sum`, `average`, `min` o `max`.
+    pub function: String,
+}
+
+/// Formato condicional: las filas que cumplen la condición se colorean.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ColorRule {
+    pub column: String,
+    pub op: String,
+    #[serde(default)]
+    pub value: Value,
+    pub color: String,
+}
+
+/// Tareas que se repiten: al marcar `done`, la fecha avanza según la regla
+/// de la columna `repeat` y la fila vuelve a estar pendiente.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Recurrence {
+    pub repeat: String,
+    pub date: String,
+    pub done: String,
+    /// Para una selección: el valor que cuenta como hecho y al que se vuelve.
+    pub done_value: Option<String>,
+    pub todo_value: Option<String>,
 }
 
 /// Una vista guardada: tipo, filtros, orden y cómo se ven las columnas.
@@ -138,6 +177,12 @@ pub struct ViewConfig {
     pub widths: BTreeMap<String, u32>,
     /// Total al pie de cada columna (`count`, `sum`...).
     pub totals: BTreeMap<String, String>,
+    /// Ajustes de la vista de gráfico.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chart: Option<Chart>,
+    /// Colores de las filas (formato condicional).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colors: Vec<ColorRule>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -149,6 +194,9 @@ pub struct Config {
     pub active_view: Option<String>,
     /// Incluir también las notas de las subcarpetas.
     pub subfolders: bool,
+    /// Tareas que se repiten.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recurrence: Option<Recurrence>,
     // Formato antiguo (una sola vista): se lee y se pasa a `views`.
     #[serde(skip_serializing)]
     sort: Option<Sort>,
@@ -216,6 +264,30 @@ impl Config {
             for map in [&mut view.widths as &mut dyn RenameKey, &mut view.totals] {
                 map.rename_key(old, new);
             }
+            view.colors.retain_mut(|r| {
+                if r.column != old {
+                    return true;
+                }
+                new.map(|n| r.column = n.to_string()).is_some()
+            });
+            if let Some(chart) = &mut view.chart {
+                swap(&mut chart.x);
+                swap(&mut chart.y);
+            }
+        }
+        if let Some(r) = &mut self.recurrence {
+            let mut gone = false;
+            for slot in [&mut r.repeat, &mut r.date, &mut r.done] {
+                if slot == old {
+                    match new {
+                        Some(n) => *slot = n.to_string(),
+                        None => gone = true,
+                    }
+                }
+            }
+            if gone {
+                self.recurrence = None;
+            }
         }
         for col in &mut self.columns {
             if let Some(rollup) = &mut col.rollup
@@ -272,7 +344,44 @@ pub struct Database {
     pub views: Vec<ViewConfig>,
     pub active_view: Option<String>,
     pub subfolders: bool,
+    pub recurrence: Option<Recurrence>,
+    /// Plantillas de la base de datos (notas de `.plantillas/`).
+    pub templates: Vec<Template>,
     pub rows: Vec<Row>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Template {
+    pub name: String,
+    pub path: String,
+}
+
+/// Carpeta oculta con las plantillas de una base de datos.
+pub const TEMPLATES_DIR: &str = ".plantillas";
+
+fn templates(root: &Path, folder: &str) -> Vec<Template> {
+    let rel = if folder.is_empty() {
+        TEMPLATES_DIR.to_string()
+    } else {
+        format!("{folder}/{TEMPLATES_DIR}")
+    };
+    let Ok(entries) = fs::read_dir(root.join(&rel)) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Template> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && vault::is_markdown(p))
+        .filter_map(|p| {
+            let file = p.file_name()?.to_str()?.to_string();
+            Some(Template {
+                name: stem(&file),
+                path: format!("{rel}/{file}"),
+            })
+        })
+        .collect();
+    out.sort_by_key(|a| a.name.to_lowercase());
+    out
 }
 
 fn millis(time: std::io::Result<std::time::SystemTime>) -> Option<u64> {
@@ -414,6 +523,8 @@ pub fn load(root: &Path, folder: &str) -> Result<Database, String> {
         views: config.views,
         active_view: config.active_view,
         subfolders: config.subfolders,
+        recurrence: config.recurrence,
+        templates: templates(root, folder),
         rows,
     })
 }
@@ -560,6 +671,34 @@ pub fn set_property(
 
 /// Propiedades de un texto con frontmatter (p. ej. una plantilla ya con las
 /// variables sustituidas).
+/// Crea una plantilla vacía para la base de datos y devuelve su ruta.
+#[tauri::command]
+pub fn create_db_template(
+    path: String,
+    name: String,
+    state: tauri::State<VaultState>,
+) -> Result<String, String> {
+    let root = vault::current_root(&state)?;
+    let dir = vault::resolve_dir(&root, &path)?;
+    let name = name.trim();
+    if !crate::files::valid_name(name) {
+        return Err(format!("«{name}» no es un nombre válido"));
+    }
+    let folder = dir.join(TEMPLATES_DIR);
+    fs::create_dir_all(&folder).map_err(|e| format!("No se pudo crear la carpeta: {e}"))?;
+    let file = folder.join(format!("{name}.md"));
+    if file.exists() {
+        return Err("Ya existe una plantilla con ese nombre".into());
+    }
+    fs::write(&file, "# {{titulo}}\n\n")
+        .map_err(|e| format!("No se pudo crear la plantilla: {e}"))?;
+    Ok(if path.is_empty() {
+        format!("{TEMPLATES_DIR}/{name}.md")
+    } else {
+        format!("{path}/{TEMPLATES_DIR}/{name}.md")
+    })
+}
+
 #[tauri::command]
 pub fn parse_properties(content: String) -> Result<Props, String> {
     props::read(&content)
@@ -819,5 +958,30 @@ mod tests {
         assert!(is_date("2026-10-20"));
         assert!(!is_date("2026/10/20"));
         assert!(!is_date("hoy"));
+    }
+
+    #[test]
+    fn renombrar_cambia_colores_grafico_y_repeticion() {
+        let mut config: Config = serde_json::from_str(
+            r#"{"views":[{"id":"v","name":"G","kind":"chart","chart":{"kind":"bar","x":"estado","y":"horas","function":"sum"},
+            "colors":[{"column":"estado","op":"is","value":"Hecho","color":"verde"}]}],
+            "recurrence":{"repeat":"repetir","date":"fecha","done":"estado","done_value":"Hecho"}}"#,
+        )
+        .unwrap();
+        config.rename_refs("estado", Some("fase"));
+        let v = &config.views[0];
+        assert_eq!(v.chart.as_ref().unwrap().x.as_deref(), Some("fase"));
+        assert_eq!(v.colors[0].column, "fase");
+        assert_eq!(config.recurrence.as_ref().unwrap().done, "fase");
+        config.rename_refs("fecha", None);
+        assert!(config.recurrence.is_none());
+        config.rename_refs("fase", None);
+        assert!(config.views[0].colors.is_empty());
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(
+            json.contains("\"chart\"")
+                && !json.contains("\"colors\"")
+                && !json.contains("recurrence")
+        );
     }
 }

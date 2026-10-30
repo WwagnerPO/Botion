@@ -117,6 +117,17 @@ pub fn open_in_system(
         .map_err(|e| format!("No se pudo abrir: {e}"))
 }
 
+/// Bytes de un adjunto de la bóveda (para ver un PDF dentro de la nota).
+#[tauri::command(async)]
+pub fn read_attachment(
+    path: String,
+    state: tauri::State<'_, VaultState>,
+) -> Result<tauri::ipc::Response, String> {
+    let file = vault::resolve(&vault::current_root(&state)?, &path)?;
+    let bytes = std::fs::read(&file).map_err(|e| format!("No se pudo leer «{path}»: {e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 /// Muestra una nota, carpeta o adjunto en el explorador de archivos.
 #[tauri::command(async)]
 pub fn reveal_in_system(

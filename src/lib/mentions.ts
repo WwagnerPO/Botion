@@ -1,3 +1,4 @@
+import { formatDate, parseNaturalDate } from "./naturalDate";
 import { today } from "./slashCommands";
 
 const fold = (t: string) =>
@@ -19,8 +20,15 @@ export function dateOptions(query: string, now = new Date()) {
     })),
   ];
   const q = fold(query.trim());
-  const exact = /^\d{4}-\d{2}-\d{2}$/.test(query.trim()) ? [{ label: query.trim(), date: query.trim() }] : [];
   const shown = options.filter((o) => !q || fold(o.label).includes(q) || o.date.startsWith(q));
+  // «el viernes», «dentro de 3 días», «15 de noviembre»...
+  const natural = parseNaturalDate(query, now);
+  const extra =
+    natural && !shown.some((o) => o.date === natural.date)
+      ? [{ label: capitalize(formatDate(natural.date, now)), date: natural.date, time: natural.time }]
+      : [];
   // Sin texto, solo las más usadas.
-  return [...exact, ...(q ? shown : shown.slice(0, 3))];
+  return [...extra, ...(q ? shown : shown.slice(0, 3))] as { label: string; date: string; time?: string | null }[];
 }
+
+const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);

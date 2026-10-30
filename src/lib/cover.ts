@@ -4,6 +4,37 @@ import { displayUrl } from "./attachments";
 export const ICON_KEY = "icono";
 export const COVER_KEY = "portada";
 
+/** Estilo de la página (como en Notion): ancho, tamaño y fuente del texto. */
+export const WIDE_KEY = "ancho_completo";
+export const SMALL_KEY = "texto_pequeño";
+export const FONT_KEY = "fuente";
+
+/** Propiedades de la página que no se ven como propiedades ni columnas. */
+export const PAGE_KEYS: ReadonlySet<string> = new Set([ICON_KEY, COVER_KEY, WIDE_KEY, SMALL_KEY, FONT_KEY]);
+
+export type PageFont = "normal" | "serif" | "mono";
+
+export interface PageStyle {
+  wide: boolean;
+  small: boolean;
+  font: PageFont;
+}
+
+/** Estilo de la página según sus propiedades. */
+export function pageStyle(props: Record<string, unknown>): PageStyle {
+  const font = String(props[FONT_KEY] ?? "").toLowerCase();
+  return {
+    wide: props[WIDE_KEY] === true,
+    small: props[SMALL_KEY] === true,
+    font: font === "serif" || font === "mono" ? font : "normal",
+  };
+}
+
+/** Clases que aplican el estilo al editor (ver editor.css). */
+export function pageClasses(style: PageStyle) {
+  return [style.font !== "normal" && `page-${style.font}`, style.small && "page-small"].filter(Boolean).join(" ");
+}
+
 /** Portadas de color: en el fichero se guarda solo el nombre. */
 export const COVERS: Record<string, string> = {
   violeta: "linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%)",

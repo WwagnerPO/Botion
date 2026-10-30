@@ -1,16 +1,18 @@
-import { Plus, Search, Table2 } from "lucide-react";
+import { ChevronDown, FileText, Pencil, Plus, Search, Table2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { COVER_KEY, ICON_KEY } from "../lib/cover";
+import { PAGE_KEYS } from "../lib/cover";
 import {
   activeView,
   columnOptions,
   configOf,
+  createDbTemplate,
   deleteDatabaseProperty,
   getDatabase,
   newView,
   renameDatabaseProperty,
   saveDatabaseConfig,
   setProperty,
+  valueText,
   type Column,
   type Config,
   type Database,
@@ -19,7 +21,11 @@ import {
   type Props as PropMap,
   type ViewConfig,
 } from "../lib/database";
-import { viewRows, type Ctx, type Related } from "../lib/dbview";
+import { rowTint, viewRows, type Ctx, type Related } from "../lib/dbview";
+import { formatDate } from "../lib/naturalDate";
+import { nextDate } from "../lib/recurrence";
+import { ChartView } from "./ChartView";
+import { Popover, PopoverItem } from "./Popover";
 import { BoardView } from "./BoardView";
 import { CalendarView } from "./CalendarView";
 import { GalleryView, ListView } from "./CardViews";
@@ -38,17 +44,15 @@ interface Props {
   onOpenNote: (path: string) => void;
   /** Abre el destino de un enlace `[[…]]`. */
   onOpenLink: (target: string) => void;
-  /** Nueva nota en la base de datos, con propiedades ya puestas. */
-  onNewRow: (folder: string, preset?: PropMap) => void;
+  /** Nueva nota en la base de datos, con propiedades ya puestas o desde una plantilla. */
+  onNewRow: (folder: string, preset?: PropMap, template?: string) => void;
   onError: (message: string) => void;
+  onNotice: (message: string) => void;
   showDialog: (request: DialogRequest) => void;
   /** Bases de datos de la bóveda, para las relaciones. */
   databases: { path: string; name: string }[];
   vaultRoot: string;
 }
-
-/** Propiedades de la cabecera de la nota: no son columnas. */
-const PAGE_KEYS = new Set([ICON_KEY, COVER_KEY]);
 
 export function DatabaseView({
   path,
@@ -57,10 +61,12 @@ export function DatabaseView({
   onOpenLink,
   onNewRow,
   onError,
+  onNotice,
   showDialog,
   databases,
   vaultRoot,
 }: Props) {
+  const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
   const [db, setDb] = useState<Database | null>(null);
   const [related, setRelated] = useState<Related>({});
   const [search, setSearch] = useState("");
@@ -126,7 +132,33 @@ export function DatabaseView({
     saveConfig({ ...database, views: database.views.map((v) => (v.id === id ? { ...v, ...patch } : v)) });
   const updateCurrent = (patch: Partial<ViewConfig>) => updateView(view.id, patch);
 
+  /**
+   * Cambia un valor. Si marca como hecha una tarea que se repite, en lugar
+   * de eso avanza su fecha y la deja pendiente otra vez.
+   */
   async function changeValue(rowPath: string, column: string, value: PropValue) {
+    const rec = database.recurrence;
+    const doneColumn = rec && database.columns.find((c) => c.name === rec.done);
+    if (rec && doneColumn && column === rec.done) {
+      const checkbox = doneColumn.kind === "checkbox";
+      const done = checkbox
+        ? value === true
+        : valueText(value).trim().toLowerCase() === (rec.done_value ?? "Hecho").toLowerCase();
+      const row = database.rows.find((r) => r.path === rowPath);
+      const rule = row ? valueText(row.props[rec.repeat]).trim() : "";
+      const date = row ? valueText(row.props[rec.date]) : "";
+      const next = done && rule && /^\d{4}-\d{2}-\d{2}/.test(date) ? nextDate(date.slice(0, 10), rule) : null;
+      if (row && next) {
+        await setValue(rowPath, rec.date, next + date.slice(10));
+        await setValue(rowPath, rec.done, checkbox ? false : (rec.todo_value || null));
+        onNotice(`«${row.name}» se repite ${rule}: la próxima es el ${formatDate(next)}.`);
+        return;
+      }
+    }
+    await setValue(rowPath, column, value);
+  }
+
+  async function setValue(rowPath: string, column: string, value: PropValue) {
     // Se ve el cambio al momento; si falla, se recarga lo que hay en disco.
     // Sobre el estado más reciente: puede haber varios cambios seguidos.
     setDb((prev) =>
@@ -219,6 +251,7 @@ export function DatabaseView({
     onChangeValue: changeValue,
     onNewRow: (preset) => onNewRow(database.path, preset),
     onUpdateView: updateCurrent,
+    tintOf: (row) => rowTint(row, view.colors, ctx),
   };
   const peekRow = peek ? database.rows.find((r) => r.path === peek) : undefined;
 
@@ -261,6 +294,7 @@ export function DatabaseView({
               onUpdate={updateCurrent}
               onAddFilter={addFilter}
               onSubfolders={(subfolders) => saveConfig({ ...database, subfolders }, true)}
+              onRecurrence={(recurrence) => saveConfig({ ...database, recurrence })}
             />
             <label className="ml-auto flex w-48 items-center gap-2 rounded-md border border-neutral-200 px-2 py-1 text-sm focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-400/20 dark:border-neutral-700">
               <Search className="size-3.5 shrink-0 text-neutral-400" />
@@ -275,14 +309,25 @@ export function DatabaseView({
             <span className="text-xs text-neutral-400">
               {rows.length} de {database.rows.length}
             </span>
-            <button
-              type="button"
-              onClick={() => onNewRow(database.path)}
-              className="flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
-            >
-              <Plus className="size-4" />
-              Nueva
-            </button>
+            <span className="flex rounded-md bg-violet-600 text-sm font-medium text-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => onNewRow(database.path)}
+                className="flex items-center gap-1 rounded-l-md py-1 pr-2 pl-2.5 hover:bg-violet-700"
+              >
+                <Plus className="size-4" />
+                Nueva
+              </button>
+              <button
+                type="button"
+                onClick={(e) => setNewMenu(e.currentTarget)}
+                aria-label="Nueva desde plantilla"
+                title="Plantillas"
+                className="rounded-r-md border-l border-violet-500 px-1.5 hover:bg-violet-700"
+              >
+                <ChevronDown className="size-4" />
+              </button>
+            </span>
           </div>
           <FilterBar
             db={database}
@@ -307,6 +352,7 @@ export function DatabaseView({
         {view.kind === "gallery" && <GalleryView {...props} />}
         {view.kind === "list" && <ListView {...props} />}
         {view.kind === "timeline" && <TimelineView {...props} />}
+        {view.kind === "chart" && <ChartView {...props} />}
 
         {database.rows.length === 0 && (
           <p className="mt-4 text-sm text-neutral-400">Aún no hay notas. Pulsa «Nueva» para crear la primera fila.</p>
@@ -334,6 +380,54 @@ export function DatabaseView({
           onHide={() => columnMenu.column && updateCurrent({ hidden: [...view.hidden, columnMenu.column.name] })}
           onDelete={() => columnMenu.column && deleteColumn(columnMenu.column)}
         />
+      )}
+
+      {newMenu && (
+        <Popover anchor={newMenu} onClose={() => setNewMenu(null)} alignRight className="w-64 p-1">
+          <p className="px-2 pt-1 pb-1 text-xs text-neutral-400">Plantillas de «{database.name}»</p>
+          {database.templates.length === 0 && (
+            <p className="px-2 pb-1 text-xs text-neutral-400">Aún no hay. Una plantilla es una nota con el texto y las propiedades de partida.</p>
+          )}
+          {database.templates.map((t) => (
+            <div key={t.path} className="group flex items-center">
+              <PopoverItem onClick={() => (setNewMenu(null), onNewRow(database.path, {}, t.path))}>
+                <FileText className="size-4 text-neutral-400" /> {t.name}
+              </PopoverItem>
+              <button
+                type="button"
+                onClick={() => (setNewMenu(null), onOpenNote(t.path))}
+                aria-label={`Editar plantilla ${t.name}`}
+                title="Editar plantilla"
+                className="mr-1 rounded-md p-1.5 text-neutral-400 opacity-0 group-hover:opacity-100 hover:bg-neutral-100 hover:text-neutral-700 focus:opacity-100 dark:hover:bg-neutral-700"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+            </div>
+          ))}
+          <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
+          <PopoverItem
+            onClick={() => {
+              setNewMenu(null);
+              showDialog({
+                kind: "prompt",
+                title: "Nueva plantilla",
+                label: "Nombre",
+                initial: "Plantilla",
+                confirm: "Crear",
+                onConfirm: async (name) => {
+                  try {
+                    const path = await createDbTemplate(database.path, name);
+                    onOpenNote(path);
+                  } catch (e) {
+                    onError(String(e));
+                  }
+                },
+              });
+            }}
+          >
+            <Plus className="size-4 text-neutral-400" /> Nueva plantilla
+          </PopoverItem>
+        </Popover>
       )}
 
       {peekRow && (

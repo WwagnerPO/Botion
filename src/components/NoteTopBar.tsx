@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, History, Share, Star } from "lucide-react";
+import { ChevronRight, FileText, History, MoreHorizontal, Share, Star } from "lucide-react";
 
 interface Props {
   path: string;
@@ -10,6 +10,10 @@ interface Props {
   favorite: boolean;
   onToggleFavorite: () => void;
   onHistory: () => void;
+  /** Menú «…» de la página (estilo, índice, sin distracciones). */
+  onMore: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  /** En modo sin distracciones la barra solo se ve al pasar el ratón. */
+  focus: boolean;
 }
 
 /** Barra fija sobre la nota: dónde está, si se ha guardado y exportar. */
@@ -23,6 +27,8 @@ export function NoteTopBar({
   favorite,
   onToggleFavorite,
   onHistory,
+  onMore,
+  focus,
 }: Props) {
   const iconButton =
     "grid size-7 shrink-0 place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-100";
@@ -30,7 +36,11 @@ export function NoteTopBar({
   const name = parts.pop()!.replace(/\.md$/i, "");
 
   return (
-    <div className="no-print sticky top-0 z-20 flex h-11 items-center gap-2 bg-white/90 px-3 text-sm backdrop-blur dark:bg-neutral-950/90">
+    <div
+      className={`no-print sticky top-0 z-20 flex h-11 items-center gap-2 bg-white/90 px-3 text-sm backdrop-blur transition-opacity dark:bg-neutral-950/90 ${
+        focus ? "opacity-0 hover:opacity-100 focus-within:opacity-100" : ""
+      }`}
+    >
       <nav aria-label="Ubicación" className="flex min-w-0 flex-1 items-center gap-0.5 text-neutral-500">
         {parts.map((part, i) => {
           const folder = parts.slice(0, i + 1).join("/");
@@ -85,6 +95,9 @@ export function NoteTopBar({
       >
         <Share className="size-4" />
         Exportar
+      </button>
+      <button type="button" onClick={onMore} className={iconButton} title="Estilo y vista de la página" aria-label="Más opciones de la página">
+        <MoreHorizontal className="size-4" />
       </button>
     </div>
   );

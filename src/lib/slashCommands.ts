@@ -13,6 +13,7 @@ import { safeDecode, youtubeId } from "./attachments";
 import type { Mention } from "./blocks";
 import { embedSchema } from "./embed";
 import { highlightSchema } from "./highlight";
+import { buttonMarkdown } from "./button";
 import { wikiLinkSchema } from "./wikilink";
 
 /**
@@ -156,6 +157,81 @@ function tocMarkdown(ctx: Ctx) {
     .join("\n");
 }
 
+/**
+ * Añade una marca de tarea (`📅 …`, `⏰ …`, `🔁 …`) al final de la línea.
+ * Si la línea aún no es una tarea, se avisa: las fechas solo cuentan ahí.
+ */
+function appendToTask(ctx: Ctx, text: string, notify: (m: string) => void) {
+  const view = ctx.get(editorViewCtx);
+  const { $from } = view.state.selection;
+  let isTask = false;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === "list_item") {
+      isTask = typeof node.attrs.checked === "boolean";
+      break;
+    }
+  }
+  const end = $from.end();
+  const before = $from.parent.textBetween(0, $from.parent.content.size);
+  view.dispatch(view.state.tr.insertText(`${before && !before.endsWith(" ") ? " " : ""}${text}`, end));
+  view.focus();
+  if (!isTask) notify("Las fechas y repeticiones cuentan en las tareas (- [ ]).");
+}
+
+/** Inserta un comentario `%%…%%` vacío en el cursor y lo abre para escribir. */
+export function insertComment(view: import("@milkdown/kit/prose/view").EditorView, at = view.state.selection.to) {
+  const node = view.state.schema.nodes.comment.create({ text: "" });
+  view.dispatch(view.state.tr.insert(at, node));
+  return at;
+}
+
+/** Nota al pie: `[^n]` en el cursor y su texto al final de la nota. */
+function insertFootnote(ctx: Ctx) {
+  const view = ctx.get(editorViewCtx);
+  const { state } = view;
+  let max = 0;
+  state.doc.descendants((n) => {
+    if (n.type.name === "footnote_reference" || n.type.name === "footnote_definition") {
+      const num = Number(n.attrs.label);
+      if (Number.isFinite(num)) max = Math.max(max, num);
+    }
+  });
+  const label = String(max + 1);
+  const ref = state.schema.nodes.footnote_reference.create({ label });
+  const def = state.schema.nodes.footnote_definition.create({ label }, state.schema.nodes.paragraph.create());
+  const tr = state.tr.replaceSelectionWith(ref);
+  const end = tr.doc.content.size;
+  tr.insert(end, def);
+  // El cursor va al texto de la nota al pie para escribirlo.
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, end + 2)).scrollIntoView());
+  view.focus();
+}
+
+/**
+ * Columnas dentro de la nota: avisos anidados con la sintaxis del fragmento
+ * «Modular CSS Layout» de Obsidian (`> [!multi-column]` con `> > [!blank]`).
+ */
+function insertColumns(ctx: Ctx, count: number) {
+  const view = ctx.get(editorViewCtx);
+  const { state } = view;
+  const callout = calloutSchema.type(ctx);
+  const title = () => calloutTitleSchema.type(ctx).create();
+  const columns = Array.from({ length: count }, () =>
+    callout.create({ calloutType: "blank", fold: "" }, [title(), state.schema.nodes.paragraph.create()]),
+  );
+  const node = callout.create({ calloutType: "multi-column", fold: "" }, [title(), ...columns]);
+  const $from = state.selection.$from;
+  const empty = $from.parent.content.size === 0;
+  const start = empty ? $from.before() : $from.after();
+  const tr = empty ? state.tr.replaceRangeWith(start, $from.after(), node) : state.tr.insert(start, node);
+  // Cursor en la primera columna: dentro del aviso, tras su título vacío,
+  // dentro de la columna y tras su título, en el párrafo.
+  const cursor = start + 7;
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, cursor)).scrollIntoView());
+  view.focus();
+}
+
 /** Posición en pantalla del cursor, para abrir selectores junto a él. */
 function caret(ctx: Ctx) {
   const view = ctx.get(editorViewCtx);
@@ -200,7 +276,23 @@ export interface SlashHandlers {
   requestUrl: (title: string, insert: (url: string) => void) => void;
   /** Mensaje breve para la persona (p. ej. si el índice está vacío). */
   notify: (message: string) => void;
+  /** Estilo de la página, modo sin distracciones e índice lateral. */
+  pageAction: (action: PageAction) => void;
+  /** Crea (si hace falta) la nota de hoy y llama a `insert` con su enlace. */
+  requestDailyNote: (insert: (target: string) => void) => void;
+  /** Pide una fecha (en lenguaje natural); con `withTime`, también la hora. */
+  requestDate: (title: string, withTime: boolean, insert: (date: string, time: string | null) => void) => void;
+  /** Pide cada cuánto se repite una tarea («cada semana»...). */
+  requestRepeat: (insert: (rule: string) => void) => void;
+  /** Abre los colores para el texto entre `from` y `to`. */
+  requestColor: (at: { x: number; y: number }, from: number, to: number) => void;
+  /** Abre el editor del comentario de la posición `pos` (recién creado). */
+  editComment: (pos: number) => void;
+  /** Pide una nota y un bloque suyo; llama a `insert` con `Nota#^id`. */
+  requestBlockRef: (insert: (target: string) => void) => void;
 }
+
+export type PageAction = "wide" | "small" | "font-normal" | "font-serif" | "font-mono" | "focus" | "outline";
 
 type MenuBuilder = {
   addGroup: (
@@ -317,12 +409,28 @@ export function buildBotionMenu(handlers: SlashHandlers) {
         handlers.requestLink((target) => insertEmbed(ctx, target));
       },
     });
+    group.addItem("synced-block", {
+      label: "Bloque sincronizado",
+      icon: icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 11a4 4 0 0 1 7-2l1 1M16 13a4 4 0 0 1-7 2l-1-1"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestBlockRef((target) => insertEmbed(ctx, target));
+      },
+    });
     group.addItem("database-view", {
       label: "Vista de base de datos",
       icon: dbViewIcon,
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestDatabase((folder) => insertEmbed(ctx, `${folder}/`));
+      },
+    });
+    group.addItem("button", {
+      label: "Botón",
+      icon: icon('<rect x="3" y="7" width="18" height="10" rx="5"/><path d="M12 10v4M10 12h4"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestDatabase((folder) => insert(buttonMarkdown(folder))(ctx));
       },
     });
     group.addItem("property", {
@@ -397,6 +505,48 @@ export function buildBotionMenu(handlers: SlashHandlers) {
         view.focus();
       },
     });
+    group.addItem("color", {
+      label: "Color",
+      icon: icon('<path d="M4 20h16"/><path d="M7 16l5-12 5 12M8.7 12h6.6"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        const view = ctx.get(editorViewCtx);
+        const { $from } = view.state.selection;
+        handlers.requestColor(caret(ctx), $from.start(), $from.end());
+      },
+    });
+    group.addItem("comment", {
+      label: "Comentario",
+      icon: icon('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.editComment(insertComment(ctx.get(editorViewCtx)));
+      },
+    });
+    group.addItem("footnote", {
+      label: "Nota al pie",
+      icon: icon('<path d="M4 7h10M4 12h10M4 17h6"/><path d="M18 4v6M16 6l2-2"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        insertFootnote(ctx);
+      },
+    });
+    group.addItem("columns-2", {
+      label: "2 columnas",
+      icon: icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        insertColumns(ctx, 2);
+      },
+    });
+    group.addItem("columns-3", {
+      label: "3 columnas",
+      icon: icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        insertColumns(ctx, 3);
+      },
+    });
     group.addItem("diagram", {
       label: "Diagrama",
       icon: diagramIcon,
@@ -421,6 +571,33 @@ export function buildBotionMenu(handlers: SlashHandlers) {
         handlers.exportNote("html");
       },
     });
+    group.addItem("daily", {
+      label: "Nota de hoy",
+      icon: icon('<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M9 15h6"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestDailyNote((target) => insertWikiLink(ctx, target));
+      },
+    });
+    const pageActions: { key: PageAction; label: string; icon: string }[] = [
+      { key: "wide", label: "Ancho completo", icon: icon('<path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/>') },
+      { key: "small", label: "Texto pequeño", icon: icon('<path d="M4 18l4-11 4 11M5.5 14h5"/><path d="M14 18l3-7 3 7M15 16h4"/>') },
+      { key: "font-normal", label: "Fuente: normal", icon: icon('<path d="M5 19l6-14 6 14M7.5 14h7"/>') },
+      { key: "font-serif", label: "Fuente: serif", icon: icon('<path d="M5 19l6-14 6 14M7.5 14h7M3 19h5M14 19h5"/>') },
+      { key: "font-mono", label: "Fuente: monoespaciada", icon: icon('<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/>') },
+      { key: "outline", label: "Índice lateral", icon: tocIcon },
+      { key: "focus", label: "Modo sin distracciones", icon: icon('<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>') },
+    ];
+    for (const a of pageActions) {
+      group.addItem(`page-${a.key}`, {
+        label: a.label,
+        icon: a.icon,
+        onRun: (ctx) => {
+          clearSlash(ctx);
+          handlers.pageAction(a.key);
+        },
+      });
+    }
     group.addItem("today", {
       label: "Fecha de hoy",
       icon: dateIcon,
@@ -435,6 +612,32 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         insertText(ctx, nowTime());
+      },
+    });
+    group.addItem("due", {
+      label: "Fecha de vencimiento",
+      icon: dateIcon,
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestDate("Fecha de vencimiento", false, (date) => appendToTask(ctx, `📅 ${date}`, handlers.notify));
+      },
+    });
+    group.addItem("reminder", {
+      label: "Recordatorio",
+      icon: icon('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestDate("Recordatorio", true, (date, time) =>
+          appendToTask(ctx, `⏰ ${date}${time ? ` ${time}` : ""}`, handlers.notify),
+        );
+      },
+    });
+    group.addItem("repeat", {
+      label: "Repetir tarea",
+      icon: icon('<path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestRepeat((rule) => appendToTask(ctx, `🔁 ${rule}`, handlers.notify));
       },
     });
   };

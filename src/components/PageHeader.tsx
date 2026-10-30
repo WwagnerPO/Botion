@@ -13,6 +13,8 @@ interface Props {
   onCover: (cover: string | null) => void;
   /** Elige una imagen, la guarda en `adjuntos/` y devuelve su enlace. */
   onUploadCover: () => Promise<string | null>;
+  /** Página a ancho completo. */
+  wide?: boolean;
 }
 
 const ghost =
@@ -30,6 +32,7 @@ export function PageHeader({
   onIcon,
   onCover,
   onUploadCover,
+  wide,
 }: Props) {
   const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [covers, setCovers] = useState<{ x: number; y: number } | null>(null);
@@ -67,7 +70,7 @@ export function PageHeader({
           </div>
         </div>
       )}
-      <div className="mx-auto w-full max-w-3xl px-14">
+      <div className={`mx-auto w-full px-14 ${wide ? "max-w-none" : "max-w-3xl"}`}>
         {icon && (
           <button
             type="button"

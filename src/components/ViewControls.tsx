@@ -1,6 +1,7 @@
 import {
   ArrowUpDown,
   CalendarDays,
+  ChartColumn,
   ChartGantt,
   Copy,
   Eye,
@@ -9,7 +10,9 @@ import {
   GalleryVerticalEnd,
   KanbanSquare,
   LayoutList,
+  Palette,
   Plus,
+  Repeat,
   Rows3,
   Settings2,
   Table2,
@@ -20,13 +23,17 @@ import {
 import { useState } from "react";
 import {
   VIEW_LABELS,
+  type Chart,
+  type ColorRule,
   type Column,
   type Database,
   type Filter,
+  type Recurrence,
   type View,
   type ViewConfig,
 } from "../lib/database";
-import { operatorsFor } from "../lib/dbview";
+import { COLORS, COLOR_NAMES } from "../lib/colors";
+import { CHART_FUNCTIONS, operatorsFor } from "../lib/dbview";
 import { ColumnIcon } from "./ColumnMenu";
 import { Popover, PopoverItem } from "./Popover";
 
@@ -37,6 +44,7 @@ export const VIEW_ICONS: Record<View, LucideIcon> = {
   gallery: GalleryVerticalEnd,
   list: LayoutList,
   timeline: ChartGantt,
+  chart: ChartColumn,
 };
 
 const VIEWS = Object.keys(VIEW_LABELS) as View[];
@@ -180,7 +188,7 @@ const toolButton = (on: boolean) =>
       : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
   }`;
 
-type Panel = "sort" | "group" | "props" | "dates";
+type Panel = "sort" | "group" | "props" | "dates" | "colors" | "chart" | "repeat";
 
 export function ViewToolbar({
   db,
@@ -188,12 +196,14 @@ export function ViewToolbar({
   onUpdate,
   onAddFilter,
   onSubfolders,
+  onRecurrence,
 }: {
   db: Database;
   view: ViewConfig;
   onUpdate: (patch: Partial<ViewConfig>) => void;
   onAddFilter: (column: string) => void;
   onSubfolders: (on: boolean) => void;
+  onRecurrence: (recurrence: Recurrence | null) => void;
 }) {
   const [panel, setPanel] = useState<{ kind: Panel; anchor: HTMLElement } | null>(null);
   const open = (kind: Panel) => (e: React.MouseEvent<HTMLElement>) => setPanel({ kind, anchor: e.currentTarget });
@@ -205,6 +215,7 @@ export function ViewToolbar({
   const dates = db.columns.filter((c) => ["date", "created", "edited", "formula"].includes(c.kind));
   const usesGroups = view.kind === "table" || view.kind === "list" || view.kind === "gallery" || view.kind === "board";
   const usesDates = view.kind === "calendar" || view.kind === "timeline";
+  const colors = view.colors ?? [];
   const colName = (n: string) => (n === "" ? "Nombre" : n);
 
   return (
@@ -225,9 +236,40 @@ export function ViewToolbar({
           <CalendarDays className="size-4" /> Fechas
         </button>
       )}
+      {view.kind === "chart" && (
+        <button type="button" className={toolButton(true)} onClick={open("chart")}>
+          <ChartColumn className="size-4" /> Gráfico
+        </button>
+      )}
+      {view.kind !== "chart" && (
+        <button type="button" className={toolButton(colors.length > 0)} onClick={open("colors")}>
+          <Palette className="size-4" /> Colores
+        </button>
+      )}
+      <button type="button" className={toolButton(!!db.recurrence)} onClick={open("repeat")}>
+        <Repeat className="size-4" /> Repetir
+      </button>
       <button type="button" className={toolButton(view.hidden.length > 0)} onClick={open("props")}>
         <Settings2 className="size-4" /> Propiedades
       </button>
+
+      {panel?.kind === "colors" && (
+        <Popover anchor={panel.anchor} onClose={close} className="w-[26rem] space-y-1.5 p-2">
+          <ColorRules db={db} rules={colors} onChange={(rules) => onUpdate({ colors: rules })} />
+        </Popover>
+      )}
+
+      {panel?.kind === "chart" && (
+        <Popover anchor={panel.anchor} onClose={close} className="w-64 p-2">
+          <ChartSettings db={db} chart={chartOf(view)} onChange={(chart) => onUpdate({ chart })} />
+        </Popover>
+      )}
+
+      {panel?.kind === "repeat" && (
+        <Popover anchor={panel.anchor} onClose={close} className="w-72 p-2">
+          <RecurrenceSettings db={db} onChange={onRecurrence} />
+        </Popover>
+      )}
 
       {panel?.kind === "sort" && (
         <Popover anchor={panel.anchor} onClose={close} className="w-64 space-y-2 p-2">
@@ -488,3 +530,213 @@ export function FilterBar({
 }
 
 const valueLabel = (v: Filter["value"]) => (v === null || v === undefined ? "" : Array.isArray(v) ? v.join(", ") : String(v));
+
+// ---------------------------------------------------------------------------
+// Formato condicional, gráfico y repetición
+
+const smallSelect = `${selectClass} min-w-0`;
+
+function ColorRules({ db, rules, onChange }: { db: Database; rules: ColorRule[]; onChange: (rules: ColorRule[]) => void }) {
+  const columns = [{ name: "", kind: "text" } as Column, ...db.columns];
+  const kindOf = (name: string) => columns.find((c) => c.name === name)?.kind ?? "text";
+  const update = (i: number, patch: Partial<ColorRule>) => onChange(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  return (
+    <>
+      <p className="px-1 text-xs text-neutral-400">Colorear las filas que cumplen una condición (gana la primera).</p>
+      {rules.map((r, i) => {
+        const ops = operatorsFor(kindOf(r.column));
+        const op = ops.find((o) => o.op === r.op);
+        return (
+          <div key={i} className="flex items-center gap-1">
+            <span data-tint={r.color} className="size-4 shrink-0 rounded border border-neutral-200 dark:border-neutral-700" />
+            <select
+              value={r.column}
+              aria-label="Propiedad"
+              onChange={(e) => update(i, { column: e.target.value, op: operatorsFor(kindOf(e.target.value))[0].op, value: "" })}
+              className={`${smallSelect} w-24`}
+            >
+              {columns.map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name || "Nombre"}
+                </option>
+              ))}
+            </select>
+            <select value={r.op} aria-label="Condición" onChange={(e) => update(i, { op: e.target.value })} className={`${smallSelect} w-24`}>
+              {ops.map((o) => (
+                <option key={o.op} value={o.op}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            {!op?.unary && (
+              <input
+                value={valueLabel(r.value)}
+                aria-label="Valor"
+                placeholder="Valor"
+                onChange={(e) =>
+                  update(i, { value: kindOf(r.column) === "number" && e.target.value !== "" ? Number(e.target.value) : e.target.value })
+                }
+                className="w-20 min-w-0 rounded-md border border-neutral-200 bg-transparent px-1.5 py-1 dark:border-neutral-700"
+              />
+            )}
+            <select value={r.color} aria-label="Color" onChange={(e) => update(i, { color: e.target.value })} className={`${smallSelect} w-24`}>
+              {COLOR_NAMES.map((c) => (
+                <option key={c} value={c}>
+                  {COLORS[c].label}
+                </option>
+              ))}
+            </select>
+            <button type="button" aria-label="Quitar color" onClick={() => onChange(rules.filter((_, j) => j !== i))} className="p-1 text-neutral-400 hover:text-red-500">
+              <X className="size-3.5" />
+            </button>
+          </div>
+        );
+      })}
+      <PopoverItem onClick={() => onChange([...rules, { column: db.columns[0]?.name ?? "", op: operatorsFor(db.columns[0]?.kind ?? "text")[0].op, value: "", color: "amarillo" }])}>
+        <Plus className="size-4 text-neutral-400" /> Añadir color
+      </PopoverItem>
+    </>
+  );
+}
+
+/** Ajustes del gráfico con valores por defecto. */
+export function chartOf(view: ViewConfig): Chart {
+  return { kind: "bar", x: null, y: null, function: "count", ...(view.chart ?? {}) };
+}
+
+function ChartSettings({ db, chart, onChange }: { db: Database; chart: Chart; onChange: (chart: Chart) => void }) {
+  const groupable = db.columns.filter((c) => c.kind !== "number" && c.kind !== "files");
+  const numeric = db.columns.filter((c) => ["number", "formula", "rollup"].includes(c.kind));
+  const kinds: [Chart["kind"], string][] = [["bar", "Barras"], ["line", "Líneas"], ["pie", "Tarta"]];
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-1">
+        {kinds.map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onChange({ ...chart, kind: k })}
+            className={`rounded-md py-1 text-xs ${
+              chart.kind === k ? "bg-violet-50 text-violet-700 ring-1 ring-violet-300 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800" : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-700/70"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <label className="block text-xs text-neutral-400">
+        {chart.kind === "pie" ? "Porciones por" : "Eje X (agrupar por)"}
+        <select value={chart.x ?? ""} onChange={(e) => onChange({ ...chart, x: e.target.value || null })} className={`${selectClass} mt-1 w-full`}>
+          <option value="">Todas juntas</option>
+          {groupable.map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-xs text-neutral-400">
+        Valor
+        <select value={chart.function} onChange={(e) => onChange({ ...chart, function: e.target.value })} className={`${selectClass} mt-1 w-full`}>
+          {Object.entries(CHART_FUNCTIONS).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+      {chart.function !== "count" && (
+        <label className="block text-xs text-neutral-400">
+          De la propiedad
+          <select value={chart.y ?? ""} onChange={(e) => onChange({ ...chart, y: e.target.value || null })} className={`${selectClass} mt-1 w-full`}>
+            <option value="">Elegir…</option>
+            {numeric.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+function RecurrenceSettings({ db, onChange }: { db: Database; onChange: (r: Recurrence | null) => void }) {
+  const r = db.recurrence;
+  const [draft, setDraft] = useState<Recurrence>(
+    r ?? {
+      repeat: db.columns.find((c) => /repet|repeat/i.test(c.name))?.name ?? "",
+      date: db.columns.find((c) => c.kind === "date")?.name ?? "",
+      done: db.columns.find((c) => c.kind === "checkbox")?.name ?? "",
+      done_value: null,
+      todo_value: null,
+    },
+  );
+  const doneColumn = db.columns.find((c) => c.name === draft.done);
+  const isSelect = doneColumn && doneColumn.kind !== "checkbox";
+  const set = (patch: Partial<Recurrence>) => setDraft((d) => ({ ...d, ...patch }));
+  const pick = (label: string, value: string, kinds: string[], key: "repeat" | "date" | "done") => (
+    <label className="block text-xs text-neutral-400">
+      {label}
+      <select value={value} onChange={(e) => set({ [key]: e.target.value })} className={`${selectClass} mt-1 w-full`}>
+        <option value="">Elegir…</option>
+        {db.columns
+          .filter((c) => kinds.includes(c.kind))
+          .map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+      </select>
+    </label>
+  );
+  const ready = draft.repeat && draft.date && draft.done;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-neutral-400">
+        Al marcar una fila como hecha, su fecha avanza según la regla («cada semana», «cada mes», «cada lunes»…) y vuelve a quedar pendiente.
+      </p>
+      {pick("Regla de repetición", draft.repeat, ["text", "select"], "repeat")}
+      {pick("Fecha que avanza", draft.date, ["date"], "date")}
+      {pick("Hecha cuando", draft.done, ["checkbox", "select", "text"], "done")}
+      {isSelect && (
+        <div className="flex gap-1.5">
+          <label className="block flex-1 text-xs text-neutral-400">
+            vale
+            <input
+              value={draft.done_value ?? ""}
+              placeholder="Hecho"
+              onChange={(e) => set({ done_value: e.target.value || null })}
+              className="mt-1 w-full rounded-md border border-neutral-200 bg-transparent px-1.5 py-1 text-sm dark:border-neutral-700"
+            />
+          </label>
+          <label className="block flex-1 text-xs text-neutral-400">
+            y vuelve a
+            <input
+              value={draft.todo_value ?? ""}
+              placeholder="Pendiente"
+              onChange={(e) => set({ todo_value: e.target.value || null })}
+              className="mt-1 w-full rounded-md border border-neutral-200 bg-transparent px-1.5 py-1 text-sm dark:border-neutral-700"
+            />
+          </label>
+        </div>
+      )}
+      <div className="flex justify-end gap-1.5 pt-1">
+        {r && (
+          <button type="button" onClick={() => onChange(null)} className="rounded-md px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950">
+            Quitar
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => onChange(draft)}
+          className="rounded-md bg-violet-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-40"
+        >
+          Guardar
+        </button>
+      </div>
+    </div>
+  );
+}

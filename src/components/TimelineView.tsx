@@ -19,7 +19,7 @@ const WEEKDAYS = ["D", "L", "M", "X", "J", "V", "S"];
  * solo día). Las barras se arrastran para moverlas, y su borde derecho para
  * cambiar el fin.
  */
-export function TimelineView({ db, view, rows, ctx, onPeek, onChangeValue }: ViewProps) {
+export function TimelineView({ db, view, rows, ctx, onPeek, onChangeValue, tintOf }: ViewProps) {
   const now = new Date();
   const [month, setMonth] = useState({ year: now.getFullYear(), month: now.getMonth() });
   const [drag, setDrag] = useState<{ path: string; mode: "move" | "end"; delta: number } | null>(null);
@@ -135,7 +135,7 @@ export function TimelineView({ db, view, rows, ctx, onPeek, onChangeValue }: Vie
             const b = Math.min(days - 1, dayIndex(e1, from));
             const icon = row.props[ICON_KEY];
             return (
-              <div key={row.path} className="relative flex h-9 items-center border-b border-neutral-100 last:border-b-0 dark:border-neutral-800/70">
+              <div key={row.path} data-tint={tintOf(row) ?? undefined} className="relative flex h-9 items-center border-b border-neutral-100 last:border-b-0 dark:border-neutral-800/70">
                 <button
                   type="button"
                   onClick={() => onPeek(row.path)}

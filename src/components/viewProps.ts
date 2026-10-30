@@ -21,4 +21,6 @@ export interface ViewProps {
   onChangeValue: (rowPath: string, column: string, value: PropValue) => void | Promise<void>;
   onNewRow: (preset: Props) => void;
   onUpdateView: (patch: Partial<ViewConfig>) => void;
+  /** Color de la fila según el formato condicional, o `null`. */
+  tintOf: (row: Row) => string | null;
 }

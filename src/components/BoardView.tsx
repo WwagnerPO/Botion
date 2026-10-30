@@ -23,6 +23,7 @@ export function BoardView({
   onOpenLink,
   onChangeValue,
   onNewRow,
+  tintOf,
 }: ViewProps) {
   const [dragOver, setDragOver] = useState<string | null>(null);
   // Columnas ya vistas, para que no desaparezcan al vaciarlas arrastrando.
@@ -92,6 +93,7 @@ export function BoardView({
                 {cards.map((row) => (
                   <li
                     key={row.path}
+                    data-tint={tintOf(row) ?? undefined}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData("text/x-botion-row", row.path);

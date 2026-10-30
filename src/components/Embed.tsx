@@ -1,11 +1,15 @@
-import { ExternalLink, FileText, Paperclip } from "lucide-react";
+import { ExternalLink, FileText, Paperclip, Pencil, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { attachmentPath, fileKind } from "../lib/attachments";
 import { splitFrontmatter } from "../lib/frontmatter";
 import { toHtml } from "../lib/preview";
 import { isDatabaseEmbed } from "../lib/embed";
 import { activeView, type Database } from "../lib/database";
-import { cell, viewRows } from "../lib/dbview";
+import { cell, rowTint, viewRows } from "../lib/dbview";
+import { PAGE_KEYS } from "../lib/cover";
+import { ChartView } from "./ChartView";
+import { PdfViewer } from "./PdfViewer";
+import { blockText, replaceBlock, sectionText, splitTarget } from "../lib/blockRefs";
 import { CellView } from "./PropertyInput";
 
 /** Lo que una incrustación necesita de la app. */
@@ -19,6 +23,11 @@ export interface EmbedHost {
   fileUrl: (path: string) => string;
   /** Abre un adjunto con el programa del sistema. */
   openFile: (path: string) => void;
+  writeNote: (path: string, content: string) => Promise<void>;
+  /** Bytes de un adjunto (PDF). */
+  readFile: (path: string) => Promise<ArrayBuffer>;
+  /** Crea una nota (`carpeta/Nombre`) y devuelve su ruta. */
+  createNote: (target: string) => Promise<string>;
 }
 
 /** Vídeo, audio u otro fichero de la bóveda incrustado con `![[…]]`. */
@@ -26,6 +35,7 @@ function FileEmbed({ target, host }: { target: string; host: EmbedHost }) {
   const kind = fileKind(target)!;
   const path = attachmentPath(target);
   const name = path.split("/").pop()!;
+  if (/\.pdf$/i.test(path)) return <PdfViewer path={path} host={host} />;
   if (kind === "video") {
     return (
       <div className="embed-media">
@@ -62,6 +72,7 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
     | { kind: "loading" }
     | { kind: "missing" }
     | { kind: "note"; path: string; html: string }
+    | { kind: "block"; path: string; id: string; markdown: string }
     | { kind: "database"; db: Database }
   >({ kind: "loading" });
 
@@ -79,8 +90,17 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
           if (current) setState({ kind: "missing" });
           return;
         }
-        const { body } = splitFrontmatter(await host.readNote(path));
-        if (current) setState({ kind: "note", path, html: toHtml(body) });
+        const content = await host.readNote(path);
+        const { block, section } = splitTarget(target);
+        // ![[Nota#^id]]: un bloque, que se puede editar desde aquí.
+        if (block) {
+          const markdown = blockText(content, block);
+          if (current) setState(markdown === null ? { kind: "missing" } : { kind: "block", path, id: block, markdown });
+          return;
+        }
+        const { body } = splitFrontmatter(content);
+        const part = section ? sectionText(body, section) : body;
+        if (current) setState(part === null ? { kind: "missing" } : { kind: "note", path, html: toHtml(part) });
       } catch {
         if (current) setState({ kind: "missing" });
       }
@@ -91,6 +111,10 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
   }, [target, host]);
 
   const name = target.replace(/\/+$/, "").split("/").pop();
+
+  if (state.kind === "block") {
+    return <BlockEmbed key={`${state.path}#${state.id}`} {...state} host={host} name={name ?? ""} />;
+  }
 
   if (state.kind === "loading") {
     return <div className="embed-box embed-muted">Cargando «{name}»…</div>;
@@ -126,7 +150,7 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
   const ctx = { db, related: {} };
   const all = viewRows(view, ctx);
   const columns = db.columns
-    .filter((c) => !view.hidden.includes(c.name) && c.name !== "icono" && c.name !== "portada")
+    .filter((c) => !view.hidden.includes(c.name) && !PAGE_KEYS.has(c.name))
     .slice(0, 5);
   const rows = all.slice(0, 20);
   return (
@@ -134,6 +158,11 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
       {header(`${db.name} · ${view.name} · ${all.length} ${all.length === 1 ? "nota" : "notas"}`, () =>
         host.open(db.path, "database"),
       )}
+      {view.kind === "chart" ? (
+        <div className="embed-table">
+          <ChartView view={view} rows={all} ctx={ctx} />
+        </div>
+      ) : (
       <div className="embed-table">
         <table>
           <thead>
@@ -146,7 +175,7 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.path}>
+              <tr key={r.path} data-tint={rowTint(r, view.colors, ctx) ?? undefined}>
                 <td>
                   <button type="button" onClick={() => host.open(r.path, "note")}>
                     {r.name}
@@ -168,6 +197,86 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
           <p className="embed-muted">Y {all.length - rows.length} más…</p>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Bloque sincronizado (`![[Nota#^id]]`): se ve como en su nota y, al
+ * editarlo aquí, se cambia en la nota original.
+ */
+function BlockEmbed({
+  path,
+  id,
+  markdown,
+  host,
+  name,
+}: {
+  path: string;
+  id: string;
+  markdown: string;
+  host: EmbedHost;
+  name: string;
+}) {
+  const [text, setText] = useState(markdown);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reload() {
+    const fresh = blockText(await host.readNote(path), id);
+    if (fresh !== null) setText(fresh);
+  }
+
+  async function save(value: string) {
+    setEditing(null);
+    if (value === text) return;
+    try {
+      // Se lee otra vez por si la nota ha cambiado mientras tanto.
+      const updated = replaceBlock(await host.readNote(path), id, value);
+      if (updated === null) throw new Error("El bloque ya no está en la nota");
+      await host.writeNote(path, updated);
+      setText(value.replace(/\s+$/, ""));
+      setError(null);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    }
+  }
+
+  return (
+    <div className="embed-box embed-synced">
+      <div className="embed-header" contentEditable={false}>
+        <span className="embed-label">
+          <RefreshCw className="size-3.5" />
+          Sincronizado con {name.split("#")[0]}
+        </span>
+        <span className="flex gap-1">
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => (reload(), setEditing(text))} title="Editar el bloque">
+            <Pencil className="size-3" /> Editar
+          </button>
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => host.open(path, "note")}>
+            Abrir <ExternalLink className="size-3" />
+          </button>
+        </span>
+      </div>
+      {editing !== null ? (
+        <textarea
+          autoFocus
+          className="embed-edit"
+          value={editing}
+          aria-label="Texto del bloque sincronizado"
+          rows={Math.max(2, editing.split("\n").length)}
+          onChange={(e) => setEditing(e.target.value)}
+          onBlur={(e) => save(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(null);
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) e.currentTarget.blur();
+          }}
+        />
+      ) : (
+        <div className="embed-body" onDoubleClick={() => setEditing(text)} dangerouslySetInnerHTML={{ __html: toHtml(text) }} />
+      )}
+      {error && <p className="embed-muted">{error}</p>}
     </div>
   );
 }
