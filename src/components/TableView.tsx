@@ -36,6 +36,7 @@ export function TableView({
   onColumnMenu,
   onAddColumn,
   onReorder,
+  tintOf,
 }: ViewProps & {
   /** Abre el menú de una columna (`null` = Nombre). */
   onColumnMenu: (column: Column | null, anchor: HTMLElement) => void;
@@ -184,6 +185,7 @@ export function TableView({
                 g.rows.map((row) => (
                   <TableRow
                     key={row.path}
+                    tint={tintOf(row)}
                     row={row}
                     columns={columns}
                     ctx={ctx}
@@ -275,6 +277,7 @@ export function TableView({
 }
 
 function TableRow({
+  tint,
   row,
   columns,
   ctx,
@@ -284,6 +287,7 @@ function TableRow({
   onChangeValue,
   onOpenLink,
 }: {
+  tint: string | null;
   row: Row;
   columns: Column[];
   ctx: ViewProps["ctx"];
@@ -295,7 +299,7 @@ function TableRow({
 }) {
   const icon = row.props.icono;
   return (
-    <tr className="group/row border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900">
+    <tr data-tint={tint ?? undefined} className="group/row border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900">
       <td className="border-r border-neutral-200 p-0 dark:border-neutral-800">
         <div className="flex items-center pr-1">
           <button

@@ -6,6 +6,7 @@ mod git;
 mod index;
 mod links;
 mod props;
+mod tasks;
 mod vault;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -13,6 +14,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             vault::open_vault,
@@ -33,6 +35,7 @@ pub fn run() {
             database::set_property,
             database::get_properties,
             database::parse_properties,
+            database::create_db_template,
             database::rename_database_property,
             database::delete_database_property,
             git::git_status,
@@ -43,8 +46,10 @@ pub fn run() {
             git::git_file_at,
             git::git_save_version,
             index::get_graph,
+            tasks::list_tasks,
             attachments::save_attachment,
             attachments::open_in_system,
+            attachments::read_attachment,
             attachments::reveal_in_system,
             export::export_html,
             export::print_page,

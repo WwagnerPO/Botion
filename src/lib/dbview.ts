@@ -5,6 +5,8 @@
  */
 import {
   compareValues,
+  type Chart,
+  type ColorRule,
   valueText,
   type Column,
   type Database,
@@ -452,4 +454,59 @@ export function total(fn: string, values: PropValue[]): string {
     case "percent_checked": return pct(values.filter((v) => v === true).length);
     default: return "";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Gráficos y formato condicional
+
+export interface ChartPoint {
+  label: string;
+  value: number;
+}
+
+export const CHART_FUNCTIONS: Record<string, string> = {
+  count: "Contar filas",
+  sum: "Suma",
+  average: "Media",
+  min: "Mínimo",
+  max: "Máximo",
+};
+
+/** Puntos del gráfico: filas agrupadas por `x` y resumidas con `y`. */
+export function chartData(rows: Row[], chart: Chart, ctx: Ctx): ChartPoint[] {
+  const summarize = (list: Row[]) => {
+    if (chart.function === "count" || !chart.y) return list.length;
+    const nums = list.map((r) => Number(valueOf(r, chart.y!, ctx))).filter((n) => Number.isFinite(n));
+    if (nums.length === 0) return 0;
+    switch (chart.function) {
+      case "sum": return round(nums.reduce((a, b) => a + b, 0));
+      case "average": return round(nums.reduce((a, b) => a + b, 0) / nums.length);
+      case "min": return Math.min(...nums);
+      case "max": return Math.max(...nums);
+      default: return list.length;
+    }
+  };
+  const column = ctx.db.columns.find((c) => c.name === chart.x);
+  if (!column) return rows.length ? [{ label: "Todas", value: summarize(rows) }] : [];
+  // Las fechas se agrupan por mes (2026-10), que es lo que suele interesar.
+  if (["date", "created", "edited"].includes(column.kind)) {
+    const months = new Map<string, Row[]>();
+    for (const r of rows) {
+      const day = dayOf(cell(r, column, ctx).value);
+      const key = day ? day.slice(0, 7) : "Sin fecha";
+      months.set(key, [...(months.get(key) ?? []), r]);
+    }
+    return [...months.keys()]
+      .sort((a, b) => (a === "Sin fecha" ? 1 : b === "Sin fecha" ? -1 : a.localeCompare(b)))
+      .map((k) => ({ label: k, value: summarize(months.get(k)!) }));
+  }
+  return groupRows(rows, column, ctx).map((g) => ({ label: g.key ?? `Sin ${column.name}`, value: summarize(g.rows) }));
+}
+
+/** Color de la primera regla que cumple la fila, o `null`. */
+export function rowTint(row: Row, rules: ColorRule[] | undefined, ctx: Ctx, now = new Date()): string | null {
+  for (const r of rules ?? []) {
+    if (matches(valueOf(row, r.column, ctx), r, now)) return r.color;
+  }
+  return null;
 }

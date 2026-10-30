@@ -12,13 +12,15 @@ import { EmojiPicker } from "./EmojiPicker";
 import { Popover, PopoverItem } from "./Popover";
 import {
   BLOCK_KINDS,
+  blockIdAt,
   convertBlock,
   deleteBlock,
   duplicateBlock,
   mentionPlugin,
   type Mention,
 } from "../lib/blocks";
-import { $view } from "@milkdown/kit/utils";
+import { $prose, $view } from "@milkdown/kit/utils";
+import { Plugin } from "@milkdown/kit/prose/state";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
 import { imageSchema } from "@milkdown/kit/preset/commonmark";
 import {
@@ -30,7 +32,16 @@ import {
 } from "../lib/attachments";
 import { highlight, highlightSchema, toggleHighlightCommand } from "../lib/highlight";
 import { renderMermaidPreview } from "../lib/mermaid";
-import { buildBotionMenu } from "../lib/slashCommands";
+import { parseButton, type ButtonSpec } from "../lib/button";
+import { buildBotionMenu, type PageAction } from "../lib/slashCommands";
+import { docStats, type DocStats } from "../lib/outline";
+import { taskDates } from "../lib/taskDates";
+import { setTextColor, textColor } from "../lib/textColor";
+import { comments } from "../lib/comments";
+import { insertComment } from "../lib/slashCommands";
+import { newBlockId } from "../lib/blockRefs";
+import { ColorMenu } from "./ColorMenu";
+import { CommentMargin, type MarginComment } from "./CommentMargin";
 import { wikiLink, wikiLinkStatus, wikiLinkStatusKey } from "../lib/wikilink";
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { useEffect, useRef, useState } from "react";
@@ -76,6 +87,20 @@ export interface EditorProps {
   onRequestMention: (insert: (mention: Mention) => void) => void;
   /** Aquí se deja una función que avisa ya del texto pendiente. */
   flushRef?: React.MutableRefObject<(() => void) | null>;
+  /** Comandos de estilo de página, índice lateral y modo sin distracciones. */
+  onPageAction: (action: PageAction) => void;
+  /** Comando «/Nota de hoy». */
+  onRequestDailyNote: (insert: (target: string) => void) => void;
+  /** Comandos «/Fecha de vencimiento» y «/Recordatorio». */
+  onRequestDate: (title: string, withTime: boolean, insert: (date: string, time: string | null) => void) => void;
+  /** Comando «/Repetir tarea». */
+  onRequestRepeat: (insert: (rule: string) => void) => void;
+  /** Comando «/Bloque sincronizado»: elegir nota y bloque. */
+  onRequestBlockRef: (insert: (target: string) => void) => void;
+  /** Al pulsar un botón (bloque ```boton). */
+  onButton: (spec: ButtonSpec) => void;
+  /** Títulos y palabras de la nota, al abrirla y al cambiarla. */
+  onStats?: (stats: DocStats) => void;
 }
 
 /**
@@ -106,15 +131,26 @@ export function Editor({
   onRequestUrl,
   onRequestMention,
   flushRef,
+  onPageAction,
+  onRequestDailyNote,
+  onStats,
+  onRequestDate,
+  onRequestRepeat,
+  onButton,
+  onRequestBlockRef,
 }: EditorProps) {
   const [blockMenu, setBlockMenu] = useState<{ anchor: HTMLElement; pos: number } | null>(null);
+  const [colorMenu, setColorMenu] = useState<{ anchor: DOMRect; from: number; to: number } | null>(null);
+  /** Comentarios `%%…%%` de la nota y el que se está editando. */
+  const [noteComments, setNoteComments] = useState<MarginComment[]>([]);
+  const [editingComment, setEditingComment] = useState<number | null>(null);
   const [emojiPicker, setEmojiPicker] = useState<{
     x: number;
     y: number;
     pick: (emoji: string) => void;
   } | null>(null);
-  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl, onRequestMention });
-  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl, onRequestMention };
+  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl, onRequestMention, onPageAction, onRequestDailyNote, onStats, onRequestDate, onRequestRepeat, onButton, onRequestBlockRef });
+  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl, onRequestMention, onPageAction, onRequestDailyNote, onStats, onRequestDate, onRequestRepeat, onButton, onRequestBlockRef };
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -154,7 +190,19 @@ export function Editor({
       features: { [Crepe.Feature.ImageBlock]: false },
       featureConfigs: {
         [Crepe.Feature.CodeMirror]: {
-          renderPreview: renderMermaidPreview,
+          // Diagramas y botones se ven ya dibujados; «Editar» enseña el texto.
+          previewOnlyByDefault: true,
+          renderPreview: (language, content, apply) => {
+            if (language.toLowerCase() !== "boton") return renderMermaidPreview(language, content, apply);
+            // Milkdown copia la vista previa como HTML: el clic se atiende en
+            // handleClick con el texto del bloque guardado en data-boton.
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "note-button";
+            button.dataset.boton = content;
+            button.textContent = parseButton(content).label;
+            return button;
+          },
           previewLabel: "Vista previa",
           previewLoading: "Cargando…",
           previewToggleText: (previewOnly) => (previewOnly ? "Editar" : "Ocultar"),
@@ -173,6 +221,23 @@ export function Editor({
                 return state.doc.rangeHasMark(from, to, type);
               },
               onRun: (ctx) => ctx.get(commandsCtx).call(toggleHighlightCommand.key),
+            });
+            builder.getGroup("formatting").addItem("color", {
+              label: "Color",
+              icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="botion-icon"><path d="M4 20h16"/><path d="M7 16l5-12 5 12M8.7 12h6.6"/></svg>',
+              active: () => false,
+              onRun: (ctx) => {
+                const view = ctx.get(editorViewCtx);
+                const { from, to } = view.state.selection;
+                const a = view.coordsAtPos(from);
+                setColorMenu({ anchor: new DOMRect(a.left, a.top, 0, a.bottom - a.top), from, to });
+              },
+            });
+            builder.getGroup("formatting").addItem("comment", {
+              label: "Comentar",
+              icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="botion-icon"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+              active: () => false,
+              onRun: (ctx) => setEditingComment(insertComment(ctx.get(editorViewCtx))),
             });
           },
         },
@@ -219,6 +284,13 @@ export function Editor({
             addCover: () => pageRef.current.onAddCover(),
             requestUrl: (title, insert) => pageRef.current.onRequestUrl(title, insert),
             requestMention: (insert) => pageRef.current.onRequestMention(insert),
+            pageAction: (action) => pageRef.current.onPageAction(action),
+            requestDailyNote: (insert) => pageRef.current.onRequestDailyNote(insert),
+            requestDate: (title, withTime, insert) => pageRef.current.onRequestDate(title, withTime, insert),
+            requestRepeat: (insert) => pageRef.current.onRequestRepeat(insert),
+            requestColor: (at, from, to) => setColorMenu({ anchor: new DOMRect(at.x, at.y - 6, 0, 0), from, to }),
+            editComment: (pos) => setEditingComment(pos),
+            requestBlockRef: (insert) => pageRef.current.onRequestBlockRef(insert),
             pickAttachment: async (accept) => {
               const file = await pickFile(accept);
               if (!file) return null;
@@ -241,6 +313,9 @@ export function Editor({
       open: (p, kind) => embedHostRef.current.open(p, kind),
       fileUrl: (p) => embedHostRef.current.fileUrl(p),
       openFile: (p) => embedHostRef.current.openFile(p),
+      writeNote: (p, c) => embedHostRef.current.writeNote(p, c),
+      readFile: (p) => embedHostRef.current.readFile(p),
+      createNote: (t) => embedHostRef.current.createNote(t),
     };
     const embedView = $view(embedSchema.node, () => (initial) => {
       const dom = document.createElement("div");
@@ -261,7 +336,10 @@ export function Editor({
           return true;
         },
         // Los clics de dentro (abrir, filas) son de la incrustación.
-        stopEvent: (e) => e.type !== "dragstart" && (e.target as HTMLElement).closest("button") !== null,
+        // Botones, el texto de un bloque sincronizado y el visor de PDF son de
+        // la incrustación, no del editor.
+        stopEvent: (e) =>
+          e.type !== "dragstart" && (e.target as HTMLElement).closest("button, textarea, input, .pdf-pages") !== null,
         ignoreMutation: () => true,
         destroy: () => setTimeout(() => root.unmount()),
       };
@@ -360,7 +438,40 @@ export function Editor({
       }),
     );
 
-    crepe.editor.use(mentions).use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    // Títulos y palabras para el índice lateral (con un poco de retraso).
+    const stats = $prose(
+      () =>
+        new Plugin({
+          view: (view) => {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const report = () => {
+              clearTimeout(timer);
+              timer = setTimeout(() => pageRef.current.onStats?.(docStats(view.state.doc)), 150);
+            };
+            report();
+            // Comentarios de la nota, para dibujarlos al margen.
+            const listComments = (doc: typeof view.state.doc) => {
+              const found: MarginComment[] = [];
+              doc.descendants((node, pos) => {
+                if (node.type.name === "comment") found.push({ pos, text: node.attrs.text });
+              });
+              setNoteComments(found);
+            };
+            listComments(view.state.doc);
+            return {
+              update: (v, prev) => {
+                if (!v.state.doc.eq(prev.doc)) {
+                  report();
+                  listComments(v.state.doc);
+                }
+              },
+              destroy: () => clearTimeout(timer),
+            };
+          },
+        }),
+    );
+
+    crepe.editor.use(stats).use(taskDates).use(textColor).use(comments).use(mentions).use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
@@ -423,6 +534,21 @@ export function Editor({
       return;
     }
 
+    // Botón de la nota (bloque ```boton).
+    const noteButton = target.closest<HTMLElement>(".note-button");
+    if (noteButton?.dataset.boton !== undefined) {
+      e.preventDefault();
+      pageRef.current.onButton(parseButton(noteButton.dataset.boton));
+      return;
+    }
+
+    // Clic en un 💬: se abre el comentario.
+    const comment = target.closest<HTMLElement>(".note-comment");
+    if (comment) {
+      withView((view) => setEditingComment(view.posAtDOM(comment, 0)));
+      return;
+    }
+
     const link = target.closest<HTMLElement>("[data-wikilink]");
     const dest = link?.dataset.wikilink;
     if (!dest) return;
@@ -455,7 +581,38 @@ export function Editor({
           }}
         />
       )}
+      <div className="relative">
       <div ref={rootRef} className="botion-editor" onClick={handleClick} />
+      <CommentMargin
+        root={rootRef.current}
+        comments={noteComments}
+        editing={editingComment}
+        coordsOf={(pos) => withView((view) => view.coordsAtPos(pos)) ?? null}
+        onEdit={setEditingComment}
+        onSave={(pos, text) =>
+          withView((view) => {
+            const node = view.state.doc.nodeAt(pos);
+            if (node?.type.name !== "comment") return;
+            view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { text }));
+            view.focus();
+          })
+        }
+        onDelete={(pos) =>
+          withView((view) => {
+            const node = view.state.doc.nodeAt(pos);
+            if (node?.type.name === "comment") view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+            view.focus();
+          })
+        }
+      />
+      </div>
+      {colorMenu && (
+        <ColorMenu
+          anchor={colorMenu.anchor}
+          onClose={() => setColorMenu(null)}
+          onPick={(patch) => withView((view) => setTextColor(view, colorMenu.from, colorMenu.to, patch))}
+        />
+      )}
       {blockMenu && (
         <Popover anchor={blockMenu.anchor} onClose={() => setBlockMenu(null)} className="w-52 p-1">
           <p className="px-2 pt-1 pb-1 text-xs text-neutral-400">Convertir en</p>
@@ -473,6 +630,18 @@ export function Editor({
           <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
           <PopoverItem onClick={() => (setBlockMenu(null), withView((view) => duplicateBlock(view, blockMenu.pos)))}>
             Duplicar
+          </PopoverItem>
+          <PopoverItem
+            onClick={() => {
+              setBlockMenu(null);
+              const id = withView((view) => blockIdAt(view, blockMenu.pos, newBlockId));
+              if (!id) return;
+              const name = notePath.split("/").pop()!.replace(/\.md$/i, "");
+              navigator.clipboard?.writeText(`![[${name}#^${id}]]`).catch(() => {});
+              onNotifyRef.current("Copiado. Pégalo en otra nota: el bloque se verá y editará en las dos.");
+            }}
+          >
+            Copiar como bloque sincronizado
           </PopoverItem>
           <PopoverItem danger onClick={() => (setBlockMenu(null), withView((view) => deleteBlock(view, blockMenu.pos)))}>
             Eliminar

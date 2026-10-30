@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newView, type Database, type Row } from "./database";
-import { cell, groupRows, matches, relatedRows, total, viewRows, type Ctx } from "./dbview";
+import { cell, chartData, groupRows, matches, relatedRows, rowTint, total, viewRows, type Ctx } from "./dbview";
 
 const row = (name: string, props: Row["props"], folder = "Tareas"): Row => ({
   path: `${folder}/${name}.md`,
@@ -19,6 +19,7 @@ const proyectos: Database = {
   views: [newView("table")],
   active_view: null,
   subfolders: false,
+  templates: [],
   rows: [row("Web", { horas: 10 }, "Proyectos"), row("App", { horas: 5 }, "Proyectos")],
 };
 
@@ -40,6 +41,7 @@ const tareas: Database = {
   views: [newView("table")],
   active_view: null,
   subfolders: false,
+  templates: [],
   rows: [
     row("Pan", { estado: "Hecho", precio: 2, fecha: "2026-10-18", hecha: true, etiquetas: ["casa"] }),
     row("Bici", { estado: "En curso", precio: 30, fecha: "2026-10-25", etiquetas: ["casa", "taller"], proyectos: ["[[Web]]", "[[App|la app]]"] }),
@@ -102,5 +104,32 @@ describe("grupos y totales", () => {
     expect(total("count_empty", ["a", null, ""])).toBe("2");
     expect(total("percent_checked", [true, false, true, null])).toBe("50 %");
     expect(total("latest", ["2026-10-18", "2026-10-25", null])).toBe("2026-10-25");
+  });
+});
+
+describe("gráficos y colores", () => {
+  it("agrupa y resume para el gráfico", () => {
+    expect(chartData(tareas.rows, { kind: "bar", x: "estado", y: null, function: "count" }, ctx)).toEqual([
+      { label: "En curso", value: 1 },
+      { label: "Hecho", value: 1 },
+      { label: "Sin estado", value: 1 },
+    ]);
+    expect(chartData(tareas.rows, { kind: "pie", x: "etiquetas", y: "precio", function: "sum" }, ctx)).toEqual([
+      { label: "casa", value: 32 },
+      { label: "taller", value: 30 },
+      { label: "Sin etiquetas", value: 5 },
+    ]);
+    expect(chartData(tareas.rows, { kind: "line", x: "fecha", y: "precio", function: "average" }, ctx)).toEqual([
+      { label: "2026-10", value: 16 },
+      { label: "Sin fecha", value: 5 },
+    ]);
+  });
+  it("formato condicional: gana la primera regla", () => {
+    const rules = [
+      { column: "estado", op: "is", value: "Hecho", color: "verde" },
+      { column: "precio", op: "gt", value: 3, color: "rojo" },
+    ];
+    expect(tareas.rows.map((r) => rowTint(r, rules, ctx))).toEqual(["verde", "rojo", "rojo"]);
+    expect(rowTint(tareas.rows[0], undefined, ctx)).toBeNull();
   });
 });

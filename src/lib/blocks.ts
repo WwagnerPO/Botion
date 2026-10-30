@@ -133,3 +133,44 @@ export function mentionPlugin(onMention: (pos: number, view: EditorView) => void
       }),
   );
 }
+
+/**
+ * Identificador `^id` del párrafo o elemento de lista en `pos`. Si aún no
+ * tiene, se le añade uno al final (bloques sincronizados).
+ */
+export function blockIdAt(view: EditorView, pos: number, newId: () => string): string | null {
+  const { doc } = view.state;
+  const $pos = doc.resolve(Math.min(pos, doc.content.size));
+  let from = -1;
+  let node: ProseNode | null = null;
+  for (let d = $pos.depth; d > 0; d--) {
+    if ($pos.node(d).isTextblock) {
+      from = $pos.before(d);
+      node = $pos.node(d);
+      break;
+    }
+  }
+  if (!node) {
+    const top = topBlockAt(view, pos);
+    if (!top) return null;
+    top.node.descendants((child, offset) => {
+      if (node) return false;
+      if (child.isTextblock) {
+        node = child;
+        from = top.from + 1 + offset;
+        return false;
+      }
+      return true;
+    });
+    if (top.node.isTextblock) {
+      node = top.node;
+      from = top.from;
+    }
+  }
+  if (!node) return null;
+  const found = /\s\^([A-Za-z0-9-]+)\s*$/.exec((node as ProseNode).textContent);
+  if (found) return found[1];
+  const id = newId();
+  view.dispatch(view.state.tr.insertText(` ^${id}`, from + (node as ProseNode).nodeSize - 1));
+  return id;
+}

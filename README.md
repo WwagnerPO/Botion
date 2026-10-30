@@ -18,7 +18,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - Enlaces entre notas `[[nota]]` y backlinks.
 - Búsqueda rápida en todas las notas (`Ctrl+K`), sin distinguir tildes.
 - Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
-- Vistas de tabla, kanban, calendario, galería, lista y cronograma, con filtros, fórmulas y relaciones.
+- Vistas de tabla, kanban, calendario, galería, lista, cronograma y gráfico, con filtros, fórmulas, relaciones y colores.
 - Plantillas.
 - Tema claro, oscuro o el del sistema.
 - Sincronización opcional con Git.
@@ -32,7 +32,7 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Código, Tabla, Fórmula |
-| Botion | Página (crea una nota y la enlaza), Mención, Imagen, Vídeo, Audio, Archivo, YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Vista de base de datos, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual |
+| Botion | Página (crea una nota y la enlaza), Mención, Nota de hoy, Imagen, Vídeo, Audio, Archivo (los PDF se ven en la nota), YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Bloque sincronizado, Vista de base de datos, Botón, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Color, Comentario, Nota al pie, 2 columnas, 3 columnas, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual, Fecha de vencimiento, Recordatorio, Repetir tarea, Ancho completo, Texto pequeño, Fuente (normal, serif, monoespaciada), Índice lateral, Modo sin distracciones |
 
 Todo se guarda con sintaxis compatible con Obsidian:
 
@@ -48,6 +48,14 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | Vídeo, audio o archivo | `![[adjuntos/clip.mp4]]` (se reproduce o se abre con su programa) |
 | YouTube | `![YouTube](https://youtu.be/…)` (miniatura; se abre en el navegador) |
 | Icono y portada | `icono: 🚀` y `portada: violeta` en el frontmatter |
+| Estilo de la página | `fuente: serif`, `ancho_completo: true`, `texto_pequeño: true` en el frontmatter |
+| Color de texto o fondo | `<span style="color: #d44c47">texto</span>` (también `background-color`) |
+| Comentario | `%%texto del comentario%%` (Obsidian no lo enseña al leer) |
+| Nota al pie | `texto[^1]` y `[^1]: nota` al final |
+| Columnas | `> [!multi-column]` con `> > [!blank]` dentro (como el fragmento «Modular CSS Layout») |
+| Tarea con fecha | `- [ ] Pagar 📅 2026-10-31 ⏰ 2026-10-30 09:00 🔁 cada mes` (como el plugin Tasks) |
+| Bloque sincronizado | `![[Nota#^abc123]]`; el bloque original acaba en ` ^abc123` |
+| Botón | bloque de código `boton` con `texto:`, `base:`, `plantilla:`, `abrir:` y propiedades |
 
 ### Atajos
 
@@ -58,6 +66,7 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | `Ctrl+F` | Buscar en la nota (`Enter` / `Mayús+Enter` para moverse) |
 | `Ctrl+N` | Nueva nota |
 | `Ctrl+Mayús+H` | Resaltar |
+| `Ctrl+.` | Modo sin distracciones |
 | `@` | Mencionar una nota o una fecha |
 | `Ctrl+clic` | Abrir en pestaña nueva |
 | `Alt+clic` | Abrir a la derecha (dos notas lado a lado) |
@@ -74,6 +83,25 @@ En macOS, `Cmd` en lugar de `Ctrl`.
 - **Grafo:** en la barra lateral. Cada nota es un punto y cada enlace una línea; «Solo alrededor de la nota abierta» muestra su entorno.
 - **Historial:** el reloj de arriba a la derecha. Muestra las versiones guardadas con Git (al sincronizar o con «Guardar versión ahora») y permite restaurar una.
 - **Convertir en…:** pulsa el asa ⋮⋮ a la izquierda de un bloque para convertirlo (texto, títulos, listas, cita, código), duplicarlo o eliminarlo. Arrástrala para moverlo.
+
+### Escribir
+
+- **Estilo de la página:** el botón «…» de arriba a la derecha cambia la fuente (normal, serif, mono), el texto pequeño y el ancho completo. Ahí también están el recuento de palabras y el tiempo de lectura.
+- **Índice lateral:** en «…» o `/Índice lateral`. Muestra los títulos de la nota y marca por dónde vas.
+- **Modo sin distracciones:** `Ctrl+.` oculta la barra lateral, las pestañas y los enlaces; la barra de arriba aparece al pasar el ratón.
+- **Nota de hoy:** en la barra lateral o la paleta de comandos. Crea `Diario/2026-10-30.md` con la plantilla «Diario» si existe (`Plantillas/Diario.md`). `/Nota de hoy` la enlaza.
+- **Colores:** selecciona texto y pulsa el botón de color de la barra (o `/Color` para todo el párrafo).
+- **Comentarios:** botón «Comentar» de la barra o `/Comentario`. Se ven como 💬 en el texto y, si hay sitio, en el margen derecho.
+- **Bloques sincronizados:** asa ⋮⋮ → «Copiar como bloque sincronizado» y pega en otra nota, o `/Bloque sincronizado` para elegir nota y bloque. Al editarlo en cualquier sitio cambia en la nota original.
+- **PDF:** `/Archivo` con un PDF lo muestra en la nota. Selecciona texto y pulsa «Subrayar»; los subrayados se guardan en «nombre (subrayados).md», junto al PDF, y cada uno se puede incrustar en otra nota.
+- **Fechas en lenguaje natural:** en `@`, `/Fecha de vencimiento` y `/Recordatorio` vale escribir «mañana», «el viernes», «dentro de 3 días», «15 de noviembre a las 18:30»…
+
+### Tareas y recordatorios
+
+- `/Fecha de vencimiento`, `/Recordatorio` y `/Repetir tarea` añaden la marca al final de una tarea (`- [ ]`).
+- «Tareas» en la barra lateral junta las tareas con fecha de toda la bóveda: vencidas, hoy, próximos 7 días y más adelante. Se pueden marcar desde ahí.
+- Los recordatorios avisan con una notificación del sistema mientras Botion está abierto (sin hora, a las 9:00).
+- Al marcar una tarea con 🔁 se apunta cuándo se hizo (`✅ fecha`) y se crea encima la siguiente, con las fechas movidas. Reglas: «cada día», «cada día laborable», «cada semana», «cada 2 semanas», «cada mes», «cada año», «cada lunes y jueves»…
 
 ### Icono y portada
 
@@ -115,11 +143,14 @@ Cada base de datos puede tener varias vistas guardadas (pestañas encima de la t
 | Galería | Tarjetas con la portada o el icono de cada nota |
 | Lista | Una línea por nota con sus propiedades a la derecha |
 | Cronograma | Barras entre una fecha de inicio y otra de fin; arrastra la barra o su borde |
+| Gráfico | Barras, líneas o tarta: filas agrupadas por una propiedad (las fechas, por mes), contadas o con la suma, media, mínimo o máximo de otra |
 
 En la barra de la vista:
 
 - **Filtro:** condiciones por propiedad («estado es Hecho», «precio > 10», «fecha en la próxima semana»…). Se cumplen todas a la vez.
 - **Ordenar** y **Agrupar** por cualquier propiedad.
+- **Colores:** formato condicional; colorea las filas que cumplen una condición («estado es Hecho» → verde).
+- **Repetir:** tareas que se repiten. Al marcar una fila como hecha, su fecha avanza según la regla de otra columna («cada semana») y vuelve a quedar pendiente.
 - **Propiedades:** mostrar u ocultar columnas en esta vista, e «Incluir subcarpetas».
 - En la tabla, arrastra el borde de una cabecera para cambiar el ancho y la cabecera entera para reordenar. Pulsa el pie de una columna para elegir un total (contar, suma, media, mediana, mínimo, máximo, % marcadas…).
 
@@ -139,6 +170,19 @@ Texto, Número, Casilla, Fecha, Selección, Etiquetas, URL, Email, Teléfono, Ar
   ```
 
   Funciones: `if`, `and`, `or`, `not`, `empty`, `length`, `concat`, `join`, `contains`, `lower`, `upper`, `trim`, `replace`, `replaceAll`, `substring`, `format`, `toNumber`, `round`, `floor`, `ceil`, `abs`, `sqrt`, `pow`, `min`, `max`, `sum`, `average`, `now`, `today`, `dateAdd`, `dateSubtract`, `dateBetween`, `formatDate`, `year`, `month`, `day`, `weekday`. Operadores: `+ - * / %`, `== != < <= > >=`, `and`/`&&`, `or`/`||`, `not`/`!`.
+
+#### Plantillas y botones
+
+- La flecha de «Nueva» abre las plantillas de la base de datos: «Nueva plantilla» crea una nota (en la carpeta oculta `.plantillas`) con el texto y las propiedades de partida; el lápiz la edita.
+- `/Botón` en cualquier nota añade un botón que crea una fila en una base de datos, con propiedades ya puestas o desde una plantilla:
+
+  ```boton
+  texto: Nueva tarea
+  base: Tareas
+  plantilla: Tarea
+  abrir: sí
+  estado: Pendiente
+  ```
 
 Las notas muestran sus propiedades encima del texto y se pueden editar ahí también. Al editarlas se conservan los comentarios y el formato del resto del frontmatter.
 
@@ -211,6 +255,7 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 
 - [ ] Publicar la v0.2.0.
 - [ ] Probar en la app real el vídeo, el audio y YouTube.
+- [ ] Probar en la app real las notificaciones de los recordatorios y el visor de PDF.
 
 **Bases de datos**
 
@@ -234,19 +279,19 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 
 **Ideas (lo que más se pide a Notion y aún no tiene)**
 
-- [ ] Modo sin distracciones: ancho completo, tipografía (serif/mono) y texto pequeño por nota.
-- [ ] Índice lateral de la nota (esquema de títulos siempre visible) y contador de palabras.
-- [ ] Notas diarias con un clic (`Diario/2026-10-19.md`) y plantilla propia.
-- [ ] Tareas con fecha de vencimiento y recordatorios (notificaciones del sistema).
-- [ ] Tareas recurrentes (cada semana, cada mes…) en las bases de datos.
-- [ ] Fechas en lenguaje natural («el viernes», «dentro de 3 días»).
-- [ ] Colores de texto y de fondo, y columnas dentro de una nota.
-- [ ] Notas al pie y comentarios en el margen.
-- [ ] Gráficos a partir de una base de datos (barras, líneas, tarta).
-- [ ] Formato condicional en tablas (colorear filas según un valor).
-- [ ] Plantillas por base de datos y botones que crean filas.
-- [ ] Bloques sincronizados (el mismo bloque en varias notas).
-- [ ] Ver PDFs dentro de la nota y subrayarlos.
+- [x] Modo sin distracciones: ancho completo, tipografía (serif/mono) y texto pequeño por nota.
+- [x] Índice lateral de la nota (esquema de títulos siempre visible) y contador de palabras.
+- [x] Notas diarias con un clic (`Diario/2026-10-19.md`) y plantilla propia.
+- [x] Tareas con fecha de vencimiento y recordatorios (notificaciones del sistema).
+- [x] Tareas recurrentes (cada semana, cada mes…) en las bases de datos.
+- [x] Fechas en lenguaje natural («el viernes», «dentro de 3 días»).
+- [x] Colores de texto y de fondo, y columnas dentro de una nota.
+- [x] Notas al pie y comentarios en el margen.
+- [x] Gráficos a partir de una base de datos (barras, líneas, tarta).
+- [x] Formato condicional en tablas (colorear filas según un valor).
+- [x] Plantillas por base de datos y botones que crean filas.
+- [x] Bloques sincronizados (el mismo bloque en varias notas).
+- [x] Ver PDFs dentro de la nota y subrayarlos.
 - [ ] Recortador web: guardar una página como nota.
 - [ ] Notas cifradas con contraseña.
 - [ ] Atajos de Vim opcionales.

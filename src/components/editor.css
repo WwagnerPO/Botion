@@ -377,3 +377,209 @@ svg.botion-icon * {
 .peek-body pre { overflow-x: auto; border-radius: 8px; background: rgb(0 0 0 / 0.04); padding: 0.8em 1em; }
 .peek-body mark { background: #fef08a; }
 .peek-body a { color: #6d28d9; text-decoration: underline; }
+
+/* Estilo de la página (menú «…»): fuente serif o mono y texto pequeño. */
+.page-serif .botion-editor .milkdown {
+  --crepe-font-default: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --crepe-font-title: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+.page-serif .botion-editor .milkdown .ProseMirror { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+.page-mono .botion-editor .milkdown {
+  --crepe-font-default: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --crepe-font-title: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.page-mono .botion-editor .milkdown .ProseMirror { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.94em; }
+.page-small .botion-editor .milkdown { --crepe-base-font-size: 14px; }
+.page-small .botion-editor .milkdown .ProseMirror { font-size: 14px; }
+
+/* Fechas de las tareas: 📅 vencimiento, ⏰ recordatorio, 🔁 repetición. */
+.botion-editor .task-chip {
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+  background: #f0efec;
+  color: #5c5a55;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.botion-editor .task-today { background: #ffedd5; color: #c2410c; }
+.botion-editor .task-overdue { background: #fee2e2; color: #b91c1c; }
+.botion-editor .task-repeat { background: #ede9fe; color: #6d28d9; }
+.botion-editor .task-done { background: transparent; color: #a19e97; }
+.dark .botion-editor .task-chip { background: #2c2b29; color: #a19e97; }
+.dark .botion-editor .task-today { background: #431407; color: #fdba74; }
+.dark .botion-editor .task-overdue { background: #450a0a; color: #fca5a5; }
+.dark .botion-editor .task-repeat { background: #2e1065; color: #c4b5fd; }
+.dark .botion-editor .task-done { background: transparent; color: #7a7771; }
+
+/* Botones (bloque ```boton): crean una fila en una base de datos. */
+.botion-editor .note-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 4px 0;
+  border-radius: 6px;
+  border: 1px solid #e5e3df;
+  background: #fff;
+  padding: 0.35em 0.9em;
+  font-size: 0.92em;
+  font-weight: 500;
+  color: #2c2b29;
+  box-shadow: 0 1px 2px rgb(15 15 15 / 0.06);
+  cursor: pointer;
+}
+.botion-editor .note-button::before { content: "＋"; color: #7c3aed; }
+.botion-editor .note-button:hover { background: #f8f7f5; }
+.dark .botion-editor .note-button { background: #252422; border-color: #3a3936; color: #e5e3df; }
+.dark .botion-editor .note-button:hover { background: #2c2b29; }
+
+/* Colores de texto y fondo (<span style="…">). */
+.botion-editor .text-color[data-bg], .botion-editor .text-color[style*="background"] { border-radius: 3px; padding: 0 0.15em; }
+
+/* Comentarios %%…%%: un 💬 en el texto. */
+.botion-editor .note-comment {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0 0.15em;
+  font-size: 0.85em;
+  background: #fef3c7;
+  user-select: none;
+}
+.dark .botion-editor .note-comment { background: #422006; }
+
+/* Columnas: > [!multi-column] con > > [!blank] dentro (o [!columnas]). */
+.botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]) {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 20px;
+  border: none;
+  background: none;
+  padding: 0;
+}
+.botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]) > .callout-title,
+.botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]) > .callout > .callout-title { display: none; }
+.botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]) > .callout {
+  margin: 0;
+  border: none;
+  border-left: 1px dashed transparent;
+  background: none;
+  padding: 0;
+}
+.botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]):hover > .callout { border-left-color: #e5e3df; padding-left: 8px; margin-left: -9px; }
+.dark .botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]):hover > .callout { border-left-color: #3a3936; }
+.botion-editor .callout:is([data-callout="multi-column"], [data-callout="columnas"]) > :not(.callout, .callout-title) { grid-column: 1 / -1; }
+
+/* Notas al pie. */
+.botion-editor .ProseMirror sup[data-type="footnote_reference"], .botion-editor .ProseMirror .footnote-reference { color: #6d28d9; cursor: default; }
+
+/* PDF dentro de la nota (pdf.js). */
+.botion-editor .pdf-viewer .embed-label { display: flex; align-items: center; gap: 0.35em; }
+.botion-editor .pdf-pages {
+  max-height: 640px;
+  overflow-y: auto;
+  padding: 8px;
+  background: #f0efec;
+  border-radius: 0 0 8px 8px;
+}
+.dark .botion-editor .pdf-pages { background: #1e1d1c; }
+.botion-editor .pdf-page {
+  position: relative;
+  width: 100%;
+  margin: 0 auto 8px;
+  background: white;
+  box-shadow: 0 1px 3px rgb(15 15 15 / 0.15);
+  overflow: hidden;
+}
+.botion-editor .pdf-page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.botion-editor .pdf-page .textLayer { z-index: 2; }
+.botion-editor .pdf-page .textLayer ::selection { background: rgb(124 58 237 / 0.3); }
+.botion-editor .pdf-highlight {
+  position: absolute;
+  z-index: 3;
+  background: rgb(250 204 21 / 0.4);
+  mix-blend-mode: multiply;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.botion-editor .pdf-page-number {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  z-index: 4;
+  font-size: 11px;
+  color: #a19e97;
+}
+.botion-editor .pdf-highlights { margin: 6px 0 0; padding: 0 8px 8px; list-style: none; font-size: 0.85em; }
+.botion-editor .pdf-highlights li { display: flex; align-items: flex-start; gap: 4px; margin: 0; padding: 0; }
+.botion-editor .pdf-highlights li::before { display: none; }
+.botion-editor .pdf-highlights button { text-align: left; border-radius: 4px; padding: 2px 4px; }
+.botion-editor .pdf-highlights button:first-child { flex: 1; border-left: 3px solid rgb(250 204 21); }
+.botion-editor .pdf-highlights button:hover { background: rgb(0 0 0 / 0.05); }
+.pdf-mark-button {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+  background: #2c2b29;
+  color: white;
+  padding: 4px 8px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+
+/* Bloques sincronizados: el ^id al final se ve tenue, y la incrustación con borde. */
+.botion-editor .block-id { color: #a19e97; font-size: 0.8em; }
+.botion-editor .embed-synced { border-left: 3px solid #f97316; }
+.botion-editor .embed-edit {
+  width: 100%;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  padding: 8px 12px;
+  font: inherit;
+  line-height: 1.6;
+}
+
+/* Notas al pie. */
+.botion-editor .ProseMirror dl { display: flex; gap: 0.6em; margin: 0.3em 0; font-size: 0.9em; color: #5c5a55; }
+.botion-editor .ProseMirror dl dt { color: #6d28d9; }
+.botion-editor .ProseMirror dl dt::after { content: "."; }
+.botion-editor .ProseMirror dl dd { margin: 0; flex: 1; }
+.dark .botion-editor .ProseMirror dl { color: #a19e97; }
+
+/* Capa de texto de pdf.js (lo justo de su pdf_viewer.css) para seleccionar. */
+.botion-editor .textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.botion-editor .textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.botion-editor .textLayer > :not(.markedContent),
+.botion-editor .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.botion-editor .textLayer .markedContent { display: contents; }
+.botion-editor .textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default; user-select: none; }
+.botion-editor .textLayer.selecting .endOfContent { top: 0; }

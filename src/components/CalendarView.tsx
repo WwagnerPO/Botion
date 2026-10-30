@@ -37,6 +37,7 @@ export function CalendarView({
   onChangeValue,
   onNewRow,
   onUpdateView,
+  tintOf,
 }: ViewProps) {
   const now = new Date();
   const [month, setMonth] = useState({
@@ -200,6 +201,7 @@ export function CalendarView({
                 {(byDay.get(day) ?? []).map((row) => (
                   <li
                     key={row.path}
+                    data-tint={tintOf(row) ?? undefined}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData("text/x-botion-row", row.path);

@@ -55,7 +55,9 @@ export async function noteToHtml(
       /\[\[([^\]|#]*)(?:#([^\]|]*))?(?:\|([^\]]+))?\]\]/g,
       (_, t, sec, alias) => `<span class="wikilink">${escape(alias ?? (t || sec || ""))}</span>`,
     )
-    .replace(/==([^=\n]+)==/g, "<mark>$1</mark>");
+    .replace(/==([^=\n]+)==/g, "<mark>$1</mark>")
+    // Los comentarios %%…%% no se exportan (igual que en Obsidian).
+    .replace(/%%[\s\S]*?%%/g, "");
   const doc = new DOMParser().parseFromString(
     DOMPurify.sanitize(marked.parse(prepared, { async: false }) as string),
     "text/html",

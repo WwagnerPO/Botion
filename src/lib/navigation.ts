@@ -50,3 +50,29 @@ export function usePathList(name: string, root: string | null, max = 50) {
   );
   return [list, update] as const;
 }
+
+/** Interruptor guardado en este ordenador (índice lateral, sin distracciones). */
+export function useStoredFlag(name: string) {
+  const key = `botion:${name}`;
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const set = useCallback(
+    (f: boolean | ((on: boolean) => boolean)) =>
+      setOn((prev) => {
+        const next = typeof f === "function" ? f(prev) : f;
+        try {
+          localStorage.setItem(key, next ? "1" : "0");
+        } catch {
+          // Sin almacenamiento local: dura hasta cerrar la app.
+        }
+        return next;
+      }),
+    [key],
+  );
+  return [on, set] as const;
+}

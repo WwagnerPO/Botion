@@ -1,6 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import {
+  AlarmClock,
   AtSign,
+  CalendarClock,
+  RefreshCw,
+  Repeat,
   CircleAlert,
   FolderOpen,
   Info,
@@ -22,13 +27,25 @@ import { GitPanel } from "./components/GitPanel";
 import { GraphView } from "./components/GraphView";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { NoteTopBar } from "./components/NoteTopBar";
+import { Outline } from "./components/Outline";
+import { TasksPanel } from "./components/TasksPanel";
+import { PageMenu } from "./components/PageMenu";
 import { PageHeader } from "./components/PageHeader";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { SplitPane } from "./components/SplitPane";
 import { TabBar } from "./components/TabBar";
-import { relocate, usePathList, type Tab } from "./lib/navigation";
+import { relocate, usePathList, useStoredFlag, type Tab } from "./lib/navigation";
+import type { DocStats } from "./lib/outline";
+import type { PageAction } from "./lib/slashCommands";
+import type { ButtonSpec } from "./lib/button";
+import { ensureBlockId, listBlocks } from "./lib/blockRefs";
+import { DAILY_TEMPLATE, dailyPath } from "./lib/daily";
+import { bucketOf, dueReminders, listTasks, notify, setTaskDone, type Task } from "./lib/tasks";
+import { formatDate, parseNaturalDate } from "./lib/naturalDate";
+import { REPEAT_OPTIONS, nextDate } from "./lib/recurrence";
+import { today } from "./lib/slashCommands";
 import { Autosaver, type SaveStatus } from "./lib/autosave";
 import { linkChecker } from "./lib/wikilink";
 import { applyTheme } from "./lib/theme";
@@ -39,7 +56,18 @@ import {
   revealInSystem,
   saveAttachment,
 } from "./lib/attachments";
-import { COVERS, COVER_KEY, ICON_KEY } from "./lib/cover";
+import {
+  COVERS,
+  COVER_KEY,
+  FONT_KEY,
+  ICON_KEY,
+  PAGE_KEYS,
+  SMALL_KEY,
+  WIDE_KEY,
+  pageClasses,
+  pageStyle,
+  type PageFont,
+} from "./lib/cover";
 import { noteToHtml, printNote, saveHtml } from "./lib/export";
 import type { SyncResult } from "./lib/git";
 import {
@@ -145,14 +173,41 @@ export default function App() {
     ((target: string) => void) | null
   >(null);
 
-  // Qué enlaces [[...]] apuntan a notas que existen, según el árbol.
-  const linkExists = useMemo(() => {
+  /** Rutas de todas las notas de la bóveda. */
+  const notePaths = useMemo(() => {
     const paths: string[] = [];
     const walk = (nodes: TreeNode[]) =>
       nodes.forEach((n) => (n.kind === "folder" ? walk(n.children) : paths.push(n.path)));
     walk(vault?.tree ?? []);
-    return linkChecker(paths);
+    return paths;
   }, [vault?.tree]);
+  // Qué enlaces [[...]] apuntan a notas que existen, según el árbol.
+  const linkExists = useMemo(() => linkChecker(notePaths), [notePaths]);
+  /** Títulos y palabras de la nota abierta. */
+  const [stats, setStats] = useState<DocStats | null>(null);
+  const [pageMenu, setPageMenu] = useState<HTMLElement | null>(null);
+  const closePageMenu = useCallback(() => setPageMenu(null), []);
+  const [outlineOn, setOutlineOn] = useStoredFlag("indice-lateral");
+  const [focus, setFocus] = useStoredFlag("sin-distracciones");
+  const noteScroll = useRef<HTMLDivElement>(null);
+  /** Tareas con fecha de la bóveda (para el panel y los recordatorios). */
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  /** Selector de fecha o de repetición pendiente (comandos «/»). */
+  const [dateRequest, setDateRequest] = useState<{
+    title: string;
+    withTime: boolean;
+    insert: (date: string, time: string | null) => void;
+  } | null>(null);
+  const [repeatRequest, setRepeatRequest] = useState<((rule: string) => void) | null>(null);
+  /** Elegir un bloque de una nota para incrustarlo sincronizado. */
+  const [blockPicker, setBlockPicker] = useState<{
+    path: string;
+    target: string;
+    content: string;
+    insert: (target: string) => void;
+  } | null>(null);
+  const mainEditor = useRef<HTMLDivElement>(null);
 
   /** Momento de la última edición en el editor (Milkdown avisa con retraso). */
   const lastEditAt = useRef(0);
@@ -301,6 +356,40 @@ export default function App() {
       unlisten.then((f) => f());
     };
   }, []);
+
+  // Tareas con fecha: se leen al abrir la bóveda y cada minuto, y avisan
+  // de los recordatorios que tocan.
+  const vaultRoot = vault?.root ?? null;
+  const refreshTasks = useCallback(async () => {
+    try {
+      const list = (await listTasks()) ?? [];
+      setTasks(list);
+      for (const t of dueReminders(list)) {
+        const name = t.path.split("/").pop()!.replace(/\.md$/i, "");
+        setNotice(`⏰ ${t.text} (${name})`);
+        notify(`⏰ ${t.text}`, name);
+      }
+    } catch {
+      // Sin bóveda abierta todavía.
+    }
+  }, []);
+  useEffect(() => {
+    setTasks([]);
+    if (!vaultRoot) return;
+    refreshTasks();
+    const id = setInterval(refreshTasks, 60_000);
+    return () => clearInterval(id);
+  }, [vaultRoot, refreshTasks]);
+
+  /** Marca una tarea desde el panel (guardando antes lo que se esté escribiendo). */
+  async function toggleTask(task: Task, done: boolean) {
+    await run(async () => {
+      await flushEdits();
+      await setTaskDone(task, done);
+      if (noteRef.current?.path === task.path) await openNote(task.path, true);
+      await refreshTasks();
+    });
+  }
 
   async function reloadTree() {
     const tree = await refreshTree();
@@ -533,6 +622,10 @@ export default function App() {
   // abierta en el momento de cada llamada.
   const openNoteRef = useRef(openNote);
   openNoteRef.current = openNote;
+  const flushEditsRef = useRef(flushEdits);
+  flushEditsRef.current = flushEdits;
+  const reloadTreeRef = useRef(reloadTree);
+  reloadTreeRef.current = reloadTree;
   const openDatabaseRef = useRef(openDatabase);
   const vaultRootRef = useRef("");
   vaultRootRef.current = vault?.root ?? "";
@@ -547,6 +640,20 @@ export default function App() {
         kind === "note" ? openNoteRef.current(path) : openDatabaseRef.current(path),
       fileUrl: (path: string) => displayUrl(path, vaultRootRef.current, ""),
       openFile: (path: string) => openInSystem(path).catch((e) => showError(String(e))),
+      // Bloques sincronizados y subrayados: si la nota está abierta, se
+      // guarda antes lo escrito y luego se vuelve a cargar.
+      writeNote: async (path: string, content: string) => {
+        const open = noteRef.current?.path === path;
+        if (open) await flushEditsRef.current();
+        await writeNote(path, content);
+        if (open) await openNoteRef.current(path, true);
+      },
+      readFile: (path: string) => invoke<ArrayBuffer>("read_attachment", { path }),
+      createNote: async (target: string) => {
+        const path = await createNote(target);
+        await reloadTreeRef.current();
+        return path;
+      },
     }),
     [],
   );
@@ -583,6 +690,47 @@ export default function App() {
     });
   }
 
+  /** Ruta de la nota de hoy; la crea (con la plantilla «Diario» si hay) si no existe. */
+  async function ensureDailyNote() {
+    const path = dailyPath();
+    if (notePaths.includes(path)) return path;
+    const created = await createNote(path.replace(/\.md$/, ""));
+    const template = listTemplates(vault?.tree ?? []).find(
+      (t) => t.name.toLowerCase() === DAILY_TEMPLATE.toLowerCase(),
+    );
+    if (template) {
+      const title = created.split("/").pop()!.replace(/\.md$/, "");
+      await writeNote(created, applyVariables(await readNote(template.path), { title }));
+    }
+    await reloadTree();
+    return created;
+  }
+
+  function openDailyNote(e?: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean }) {
+    run(async () => openFrom(await ensureDailyNote(), e));
+  }
+
+  /** Estilo de la página y vistas (menú «…» y comandos «/»). */
+  function pageAction(action: PageAction) {
+    const style = pageStyle(props);
+    switch (action) {
+      case "wide":
+        return changeProperty(WIDE_KEY, style.wide ? null : true);
+      case "small":
+        return changeProperty(SMALL_KEY, style.small ? null : true);
+      case "font-normal":
+      case "font-serif":
+      case "font-mono": {
+        const font = action.slice(5) as PageFont;
+        return changeProperty(FONT_KEY, font === "normal" ? null : font);
+      }
+      case "outline":
+        return setOutlineOn((on) => !on);
+      case "focus":
+        return setFocus((on) => !on);
+    }
+  }
+
   /** Comando «/Página»: crea una nota junto a la abierta y la enlaza. */
   function requestPage(insert: (target: string) => void) {
     const folder = noteRef.current?.path.split("/").slice(0, -1).join("/") ?? "";
@@ -601,8 +749,46 @@ export default function App() {
     });
   }
 
+  /** Comando «/Bloque sincronizado»: primero la nota, luego el bloque. */
+  function requestBlockRef(insert: (target: string) => void, from: string) {
+    setLinkRequest(() => (target: string) =>
+      run(async () => {
+        const path = await resolveNoteLink(target, from);
+        if (!path) return setError(`No existe la nota «${target}»`);
+        if (path === from) {
+          setNotice("Para un bloque de esta misma nota usa el asa ⋮⋮ → «Copiar como bloque sincronizado».");
+          return;
+        }
+        setBlockPicker({ path, target, content: await readNote(path), insert });
+      }),
+    );
+  }
+
+  /** Botón de una nota: crea una fila en su base de datos. */
+  async function runButton(spec: ButtonSpec) {
+    const want = (spec.database ?? "").replace(/\/$/, "").toLowerCase();
+    const db = listDatabases().find((d) => d.path.toLowerCase() === want || d.name.toLowerCase() === want);
+    if (!db) {
+      setError(spec.database ? `No hay ninguna base de datos «${spec.database}»` : "El botón no dice en qué base de datos crear la fila (base: …)");
+      return;
+    }
+    let template: string | undefined;
+    if (spec.template) {
+      const name = spec.template.toLowerCase();
+      const found =
+        (await getDatabase(db.path).catch(() => null))?.templates.find((t) => t.name.toLowerCase() === name) ??
+        listTemplates(vault?.tree ?? []).find((t) => t.name.toLowerCase() === name);
+      if (!found) {
+        setError(`No hay ninguna plantilla «${spec.template}»`);
+        return;
+      }
+      template = found.path;
+    }
+    newRow(db.path, spec.props, template, spec.open);
+  }
+
   /** Nueva fila (nota) en una base de datos, sin salir de la tabla. */
-  function newRow(folder: string, preset: Props = {}) {
+  function newRow(folder: string, preset: Props = {}, template?: string, open = false) {
     setDialog({
       kind: "prompt",
       title: "Nueva fila",
@@ -612,12 +798,15 @@ export default function App() {
       onConfirm: (name) =>
         run(async () => {
           const path = await createNote(`${folder}/${name}`);
+          if (template) await writeNote(path, applyVariables(await readNote(template), { title: name }));
           // Valores de la columna del kanban o del día del calendario.
           for (const [key, value] of Object.entries(preset)) {
-            await setProperty(path, key, value);
+            await setProperty(path, key, typeof value === "string" ? applyVariables(value, { title: name }) : value);
           }
           await reloadTree();
           setDbReloadKey((k) => k + 1);
+          if (open) await openNote(path);
+          else if (!database) setNotice(`Creada «${name}» en ${folder}.`);
         }),
     });
   }
@@ -875,6 +1064,15 @@ export default function App() {
     { id: "theme-system", name: "Tema del sistema", run: () => applyTheme("system") },
     { id: "open-vault", name: "Abrir otra bóveda", run: () => handleOpenVault() },
     { id: "graph", name: "Abrir el grafo de notas", run: () => setGraphOpen(true) },
+    { id: "daily", name: "Abrir la nota de hoy", run: () => openDailyNote() },
+    { id: "tasks", name: "Tareas con fecha", run: () => (setTasksOpen(true), refreshTasks()) },
+    { id: "focus", name: focus ? "Salir del modo sin distracciones" : "Modo sin distracciones", hint: "Ctrl+.", run: () => setFocus((f) => !f) },
+    { id: "outline", name: outlineOn ? "Ocultar el índice lateral" : "Mostrar el índice lateral", needsNote: true, run: () => setOutlineOn((o) => !o) },
+    { id: "wide", name: "Ancho completo", needsNote: true, run: () => pageAction("wide") },
+    { id: "small", name: "Texto pequeño", needsNote: true, run: () => pageAction("small") },
+    { id: "font-normal", name: "Fuente: normal", needsNote: true, run: () => pageAction("font-normal") },
+    { id: "font-serif", name: "Fuente: serif", needsNote: true, run: () => pageAction("font-serif") },
+    { id: "font-mono", name: "Fuente: monoespaciada", needsNote: true, run: () => pageAction("font-mono") },
     { id: "history", name: "Historial de la nota", needsNote: true, run: () => setHistoryOpen(true) },
     {
       id: "favorite",
@@ -992,6 +1190,11 @@ export default function App() {
       }
       if (e.shiftKey) return;
       const key = e.key.toLowerCase();
+      if (key === ".") {
+        e.preventDefault();
+        setFocus((f) => !f);
+        return;
+      }
       if (key === "w" && tabs.length > 0) {
         e.preventDefault();
         closeTab(activeTab);
@@ -1053,6 +1256,14 @@ export default function App() {
       }),
       onAddCover: onlyMain,
       onRequestMention: (insert: (m: Mention) => void) => setMentionRequest(() => insert),
+      onPageAction: (action: PageAction) => (action === "focus" || action === "outline" ? pageAction(action) : onlyMain()),
+      onRequestDailyNote: (insert: (target: string) => void) =>
+        run(async () => insert(linkTarget(await ensureDailyNote()))),
+      onRequestDate: (title: string, withTime: boolean, insert: (date: string, time: string | null) => void) =>
+        setDateRequest({ title, withTime, insert }),
+      onRequestRepeat: (insert: (rule: string) => void) => setRepeatRequest(() => insert),
+      onButton: runButton,
+      onRequestBlockRef: (insert: (target: string) => void) => requestBlockRef(insert, path),
       onRequestUrl: (title: string, insert: (url: string) => void) =>
         setDialog({ kind: "prompt", title, label: "Dirección (https://…)", initial: "", confirm: "Insertar", onConfirm: (url) => insert(url) }),
     };
@@ -1060,12 +1271,12 @@ export default function App() {
 
   const noteIcon = typeof props[ICON_KEY] === "string" ? (props[ICON_KEY] as string) : null;
   const noteCover = typeof props[COVER_KEY] === "string" ? (props[COVER_KEY] as string) : null;
-  const visibleProps = Object.fromEntries(
-    Object.entries(props).filter(([k]) => k !== ICON_KEY && k !== COVER_KEY),
-  );
+  const visibleProps = Object.fromEntries(Object.entries(props).filter(([k]) => !PAGE_KEYS.has(k)));
+  const style = pageStyle(props);
 
   return (
     <div className="flex h-full">
+      {!focus && (
       <Sidebar
         vault={vault}
         selected={note?.path ?? database}
@@ -1082,6 +1293,12 @@ export default function App() {
         onSearch={() => setSearching(true)}
         onCommands={() => setCommandsOpen(true)}
         onGraph={() => setGraphOpen(true)}
+        onDaily={(e) => openDailyNote(e)}
+        onTasks={() => {
+          setTasksOpen((o) => !o);
+          refreshTasks();
+        }}
+        tasksDue={tasks.filter((t) => !t.done && (bucketOf(t) === "overdue" || bucketOf(t) === "today")).length}
         onContextMenu={handleContextMenu}
         onMove={moveTo}
         footer={
@@ -1095,6 +1312,7 @@ export default function App() {
           )
         }
       />
+      )}
       <main className="flex min-w-0 flex-1 flex-col">
         {(error || notice) && (
           <div className="pointer-events-none fixed right-4 bottom-4 z-40 flex max-w-sm flex-col gap-2">
@@ -1134,16 +1352,13 @@ export default function App() {
             )}
           </div>
         )}
-        <TabBar
-          tabs={tabs}
-          active={activeTab}
-          iconOf={iconOf}
-          onSelect={selectTab}
-          onClose={closeTab}
-        />
+        {!focus && (
+          <TabBar tabs={tabs} active={activeTab} iconOf={iconOf} onSelect={selectTab} onClose={closeTab} />
+        )}
         <div className="flex min-h-0 flex-1">
         {note ? (
           <div
+            ref={noteScroll}
             className="flex-1 overflow-y-auto"
             onKeyDownCapture={markEdit}
             onBeforeInputCapture={markEdit}
@@ -1154,6 +1369,8 @@ export default function App() {
               favorite={favorites.includes(note.path)}
               onToggleFavorite={() => toggleFavorite(note.path)}
               onHistory={() => setHistoryOpen(true)}
+              onMore={(e) => setPageMenu(e.currentTarget)}
+              focus={focus}
               path={note.path}
               icon={noteIcon}
               status={STATUS_TEXT[status]}
@@ -1169,6 +1386,7 @@ export default function App() {
             />
             <div className={noteCover ? "" : "pt-10"}>
               <PageHeader
+                wide={style.wide}
                 icon={noteIcon}
                 cover={noteCover}
                 vaultRoot={vault?.root ?? ""}
@@ -1187,7 +1405,8 @@ export default function App() {
                 }}
               />
             </div>
-            <div className="mx-auto w-full max-w-3xl pt-4">
+            <div className="flex">
+            <div ref={mainEditor} className={`mx-auto w-full min-w-0 pt-4 ${style.wide ? "max-w-none" : "max-w-3xl"} ${pageClasses(style)}`}>
               <PropertiesPanel
                 path={note.path}
                 props={visibleProps}
@@ -1232,6 +1451,13 @@ export default function App() {
                   }
                 }}
                 onRequestMention={(insert) => setMentionRequest(() => insert)}
+                onPageAction={pageAction}
+                onRequestDailyNote={(insert) => run(async () => insert(linkTarget(await ensureDailyNote())))}
+                onStats={setStats}
+                onRequestDate={(title, withTime, insert) => setDateRequest({ title, withTime, insert })}
+                onRequestRepeat={(insert) => setRepeatRequest(() => insert)}
+                onButton={runButton}
+                onRequestBlockRef={(insert) => requestBlockRef(insert, note.path)}
                 onRequestUrl={(title, insert) =>
                   setDialog({
                     kind: "prompt",
@@ -1243,10 +1469,16 @@ export default function App() {
                   })
                 }
               />
-              <Backlinks
-                backlinks={backlinks}
-                onSelect={(path) => openNote(path)}
+              {!focus && <Backlinks backlinks={backlinks} onSelect={(path) => openNote(path)} />}
+            </div>
+            {outlineOn && !focus && (
+              <Outline
+                stats={stats}
+                scroller={noteScroll.current}
+                editor={mainEditor.current}
+                onClose={() => setOutlineOn(false)}
               />
+            )}
             </div>
           </div>
         ) : database ? (
@@ -1265,6 +1497,7 @@ export default function App() {
             }
             onNewRow={newRow}
             onError={showError}
+            onNotice={setNotice}
             showDialog={setDialog}
             databases={listDatabases()}
             vaultRoot={vault?.root ?? ""}
@@ -1348,6 +1581,99 @@ export default function App() {
             await openNote(note.path, true);
             setNotice("Versión restaurada. La anterior sigue en el historial.");
           }}
+        />
+      )}
+      {pageMenu && note && (
+        <PageMenu
+          anchor={pageMenu}
+          style={style}
+          stats={stats}
+          outline={outlineOn}
+          focus={focus}
+          onClose={closePageMenu}
+          onFont={(font) => pageAction(`font-${font}`)}
+          onToggleWide={() => pageAction("wide")}
+          onToggleSmall={() => pageAction("small")}
+          onToggleOutline={() => pageAction("outline")}
+          onToggleFocus={() => pageAction("focus")}
+        />
+      )}
+      {tasksOpen && (
+        <TasksPanel
+          tasks={tasks}
+          iconOf={iconOf}
+          onToggle={toggleTask}
+          onOpen={(path) => openNote(path)}
+          onClose={() => setTasksOpen(false)}
+        />
+      )}
+      {dateRequest && (
+        <SearchPalette
+          placeholder={dateRequest.withTime ? "Cuándo: «mañana a las 9», «el viernes 18:00»…" : "Fecha: «el viernes», «dentro de 3 días»…"}
+          recentLabel={dateRequest.title}
+          allowCreate={false}
+          icon={dateRequest.withTime ? AlarmClock : CalendarClock}
+          source={async (query) => {
+            const natural = parseNaturalDate(query);
+            const options = natural
+              ? [natural]
+              : dateOptions(query).map((d) => ({ date: d.date, time: dateRequest.withTime ? "09:00" : null }));
+            return options.map((o) => {
+              const time = dateRequest.withTime ? (o.time ?? "09:00") : null;
+              const label = formatDate(o.date);
+              return {
+                path: `${o.date}${time ? ` ${time}` : ""}`,
+                name: label.charAt(0).toUpperCase() + label.slice(1) + (time ? ` a las ${time}` : ""),
+                snippet: o.date,
+              };
+            });
+          }}
+          onOpen={(value) => dateRequest.insert(value.slice(0, 10), value.length > 10 ? value.slice(11) : null)}
+          onCreate={() => {}}
+          onClose={() => setDateRequest(null)}
+        />
+      )}
+      {blockPicker && (
+        <SearchPalette
+          placeholder={`Bloque de «${blockPicker.target}»…`}
+          recentLabel="Bloques"
+          allowCreate={false}
+          icon={RefreshCw}
+          source={async (query) => {
+            const q = query.trim().toLowerCase();
+            return listBlocks(blockPicker.content)
+              .filter((b) => !q || b.text.toLowerCase().includes(q))
+              .slice(0, 50)
+              .map((b) => ({ path: String(b.line), name: b.text || "(vacío)", snippet: b.id ? `^${b.id}` : "" }));
+          }}
+          onOpen={(line) =>
+            run(async () => {
+              // El identificador se añade en la nota original si aún no tiene.
+              const fresh = await readNote(blockPicker.path);
+              const { content, id } = ensureBlockId(fresh, Number(line));
+              if (content !== fresh) await writeNote(blockPicker.path, content);
+              blockPicker.insert(`${blockPicker.target}#^${id}`);
+            })
+          }
+          onCreate={() => {}}
+          onClose={() => setBlockPicker(null)}
+        />
+      )}
+      {repeatRequest && (
+        <SearchPalette
+          placeholder="Cada cuánto: «cada semana», «cada lunes y jueves»…"
+          recentLabel="Repetir"
+          allowCreate={false}
+          icon={Repeat}
+          source={async (query) => {
+            const q = query.trim();
+            const valid = q && nextDate(today(), q) ? [q] : [];
+            const options = [...valid, ...REPEAT_OPTIONS.filter((o) => o !== q && (!q || o.includes(q.toLowerCase())))];
+            return options.map((o) => ({ path: o, name: o, snippet: `Siguiente: ${formatDate(nextDate(today(), o)!)}` }));
+          }}
+          onOpen={(rule) => repeatRequest(rule)}
+          onCreate={() => {}}
+          onClose={() => setRepeatRequest(null)}
         />
       )}
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}

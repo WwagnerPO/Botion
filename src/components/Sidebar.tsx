@@ -1,4 +1,6 @@
 import {
+  CalendarDays,
+  CheckSquare,
   ChevronsUpDown,
   Clock,
   FileText,
@@ -33,6 +35,11 @@ interface Props {
   onSearch: () => void;
   onCommands: () => void;
   onGraph: () => void;
+  /** Abre (o crea) la nota de hoy. */
+  onDaily: (e: React.MouseEvent) => void;
+  /** Panel de tareas con fecha; `tasksDue` son las vencidas o de hoy. */
+  onTasks: () => void;
+  tasksDue: number;
   /** Mover una nota o carpeta a otra carpeta (`""` es la raíz). */
   onMove: (path: string, folder: string) => void;
   /** Contenido extra al pie (estado de Git). */
@@ -58,6 +65,9 @@ export function Sidebar({
   onSearch,
   onCommands,
   onGraph,
+  onDaily,
+  onTasks,
+  tasksDue,
   onContextMenu,
   onMove,
   footer,
@@ -113,6 +123,19 @@ export function Sidebar({
             <Command className="size-4" />
             <span className="flex-1">Comandos</span>
             <kbd>Ctrl P</kbd>
+          </button>
+          <button type="button" onClick={onDaily} className={navItem}>
+            <CalendarDays className="size-4" />
+            <span className="flex-1">Nota de hoy</span>
+          </button>
+          <button type="button" onClick={onTasks} className={navItem}>
+            <CheckSquare className="size-4" />
+            <span className="flex-1">Tareas</span>
+            {tasksDue > 0 && (
+              <span className="rounded-full bg-orange-100 px-1.5 text-[11px] font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                {tasksDue}
+              </span>
+            )}
           </button>
           <button type="button" onClick={onGraph} className={navItem}>
             <Network className="size-4" />

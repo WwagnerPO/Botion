@@ -63,7 +63,7 @@ export interface Row {
   modified: number | null;
 }
 
-export type View = "table" | "board" | "calendar" | "gallery" | "list" | "timeline";
+export type View = "table" | "board" | "calendar" | "gallery" | "list" | "timeline" | "chart";
 
 export const VIEW_LABELS: Record<View, string> = {
   table: "Tabla",
@@ -72,6 +72,7 @@ export const VIEW_LABELS: Record<View, string> = {
   gallery: "Galería",
   list: "Lista",
   timeline: "Cronograma",
+  chart: "Gráfico",
 };
 
 /** Condición de un filtro: «estado es Hecho». */
@@ -79,6 +80,35 @@ export interface Filter {
   column: string;
   op: string;
   value: PropValue;
+}
+
+/** Gráfico de una vista. */
+export interface Chart {
+  kind: "bar" | "line" | "pie";
+  /** Columna de las categorías. */
+  x: string | null;
+  /** Columna numérica que se resume (sin ella se cuentan filas). */
+  y: string | null;
+  function: string;
+}
+
+/** Formato condicional: color de las filas que cumplen la condición. */
+export interface ColorRule extends Filter {
+  color: string;
+}
+
+/** Tareas que se repiten: al marcar `done`, la fecha avanza y vuelve a pendiente. */
+export interface Recurrence {
+  repeat: string;
+  date: string;
+  done: string;
+  done_value?: string | null;
+  todo_value?: string | null;
+}
+
+export interface Template {
+  name: string;
+  path: string;
 }
 
 /** Una vista guardada de la base de datos. */
@@ -97,6 +127,8 @@ export interface ViewConfig {
   hidden: string[];
   widths: Record<string, number>;
   totals: Record<string, string>;
+  chart?: Chart | null;
+  colors?: ColorRule[];
 }
 
 /** Lo que se guarda en `.botion-db.json`. */
@@ -106,12 +138,15 @@ export interface Config {
   active_view: string | null;
   /** Incluir las notas de las subcarpetas. */
   subfolders: boolean;
+  recurrence?: Recurrence | null;
 }
 
 export interface Database extends Config {
   path: string;
   name: string;
   rows: Row[];
+  /** Plantillas de la base de datos (notas de `.plantillas/`). */
+  templates: Template[];
 }
 
 export const KIND_LABELS: Record<Kind, string> = {
@@ -161,6 +196,7 @@ export function configOf(db: Config): Config {
     views: db.views,
     active_view: db.active_view,
     subfolders: db.subfolders,
+    recurrence: db.recurrence ?? null,
   };
 }
 
@@ -175,6 +211,11 @@ export function saveDatabaseConfig(path: string, config: Config): Promise<void> 
 /** Convierte una carpeta en base de datos (creándola si no existe). */
 export function createDatabase(path: string): Promise<string> {
   return invoke<string>("create_database", { path });
+}
+
+/** Crea una plantilla vacía en la base de datos y devuelve su ruta. */
+export function createDbTemplate(path: string, name: string): Promise<string> {
+  return invoke<string>("create_db_template", { path, name });
 }
 
 /** Cambia una propiedad de una nota; `null` la quita. */

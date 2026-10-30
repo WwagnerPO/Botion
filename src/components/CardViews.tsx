@@ -44,7 +44,7 @@ function Values({ row, columns, ctx, onOpenLink, max }: { row: Row; columns: Col
 }
 
 export function GalleryView(props: ViewProps) {
-  const { columns, ctx, vaultRoot, onPeek, onNewRow, onOpenLink } = props;
+  const { columns, ctx, vaultRoot, onPeek, onNewRow, onOpenLink, tintOf } = props;
   const { groups, column } = useGroups(props);
   return (
     <div>
@@ -58,6 +58,7 @@ export function GalleryView(props: ViewProps) {
               return (
                 <article
                   key={row.path}
+                  data-tint={tintOf(row) ?? undefined}
                   className="group overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(15_15_15/0.08),0_2px_4px_rgb(15_15_15/0.05)] transition-shadow hover:shadow-[0_0_0_1px_rgb(15_15_15/0.1),0_6px_16px_rgb(15_15_15/0.1)] dark:bg-neutral-900 dark:shadow-[0_0_0_1px_rgb(255_255_255/0.08)]"
                 >
                   <button type="button" onClick={() => onPeek(row.path)} className="block w-full text-left">
@@ -96,7 +97,7 @@ export function GalleryView(props: ViewProps) {
 }
 
 export function ListView(props: ViewProps) {
-  const { columns, ctx, onPeek, onNewRow, onOpenLink } = props;
+  const { columns, ctx, onPeek, onNewRow, onOpenLink, tintOf } = props;
   const { groups, column } = useGroups(props);
   return (
     <div>
@@ -107,7 +108,7 @@ export function ListView(props: ViewProps) {
             {g.rows.map((row) => {
               const icon = row.props[ICON_KEY];
               return (
-                <li key={row.path} className="flex min-h-9 items-center gap-3 rounded-md px-2 hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                <li key={row.path} data-tint={tintOf(row) ?? undefined} className="flex min-h-9 items-center gap-3 rounded-md px-2 hover:bg-neutral-50 dark:hover:bg-neutral-900">
                   <button type="button" onClick={() => onPeek(row.path)} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left">
                     {typeof icon === "string" ? (
                       <span className="w-4 text-center">{icon}</span>

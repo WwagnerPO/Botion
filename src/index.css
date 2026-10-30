@@ -70,3 +70,59 @@ kbd {
   .milkdown-code-block .tools,
   .milkdown-code-block .preview-label { display: none !important; }
 }
+
+/* Colores (lib/colors.ts): filas de tablas, texto y fondo en las notas. */
+[data-tint="gris"] { background-color: #f1f1ef; }
+.dark [data-tint="gris"] { background-color: #2f2f2f; }
+[data-color="gris"] { color: #787774; }
+.dark [data-color="gris"] { color: #9b9b9b; }
+[data-bg="gris"] { background-color: #f1f1ef; }
+.dark [data-bg="gris"] { background-color: #2f2f2f; }
+[data-tint="marrón"] { background-color: #f4eeee; }
+.dark [data-tint="marrón"] { background-color: #4a3228; }
+[data-color="marrón"] { color: #9f6b53; }
+.dark [data-color="marrón"] { color: #ba856f; }
+[data-bg="marrón"] { background-color: #f4eeee; }
+.dark [data-bg="marrón"] { background-color: #4a3228; }
+[data-tint="naranja"] { background-color: #fbecdd; }
+.dark [data-tint="naranja"] { background-color: #5c3b23; }
+[data-color="naranja"] { color: #d9730d; }
+.dark [data-color="naranja"] { color: #c77d48; }
+[data-bg="naranja"] { background-color: #fbecdd; }
+.dark [data-bg="naranja"] { background-color: #5c3b23; }
+[data-tint="amarillo"] { background-color: #fbf3db; }
+.dark [data-tint="amarillo"] { background-color: #564328; }
+[data-color="amarillo"] { color: #cb912f; }
+.dark [data-color="amarillo"] { color: #ca9849; }
+[data-bg="amarillo"] { background-color: #fbf3db; }
+.dark [data-bg="amarillo"] { background-color: #564328; }
+[data-tint="verde"] { background-color: #edf3ec; }
+.dark [data-tint="verde"] { background-color: #243d30; }
+[data-color="verde"] { color: #448361; }
+.dark [data-color="verde"] { color: #529e72; }
+[data-bg="verde"] { background-color: #edf3ec; }
+.dark [data-bg="verde"] { background-color: #243d30; }
+[data-tint="azul"] { background-color: #e7f3f8; }
+.dark [data-tint="azul"] { background-color: #143a4e; }
+[data-color="azul"] { color: #337ea9; }
+.dark [data-color="azul"] { color: #379ad3; }
+[data-bg="azul"] { background-color: #e7f3f8; }
+.dark [data-bg="azul"] { background-color: #143a4e; }
+[data-tint="morado"] { background-color: #f4f0f7; }
+.dark [data-tint="morado"] { background-color: #3c2d49; }
+[data-color="morado"] { color: #9065b0; }
+.dark [data-color="morado"] { color: #9d68d3; }
+[data-bg="morado"] { background-color: #f4f0f7; }
+.dark [data-bg="morado"] { background-color: #3c2d49; }
+[data-tint="rosa"] { background-color: #f9eef3; }
+.dark [data-tint="rosa"] { background-color: #4e2c3c; }
+[data-color="rosa"] { color: #c14c8a; }
+.dark [data-color="rosa"] { color: #d15796; }
+[data-bg="rosa"] { background-color: #f9eef3; }
+.dark [data-bg="rosa"] { background-color: #4e2c3c; }
+[data-tint="rojo"] { background-color: #fdebec; }
+.dark [data-tint="rojo"] { background-color: #522e2a; }
+[data-color="rojo"] { color: #d44c47; }
+.dark [data-color="rojo"] { color: #df5452; }
+[data-bg="rojo"] { background-color: #fdebec; }
+.dark [data-bg="rojo"] { background-color: #522e2a; }
