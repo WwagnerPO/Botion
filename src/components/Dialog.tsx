@@ -7,6 +7,10 @@ export type DialogRequest =
       label: string;
       initial?: string;
       confirm: string;
+      /** Campo de contraseña (no se ve ni se recortan los espacios). */
+      password?: boolean;
+      /** Pide escribirla otra vez para comprobarla (texto del segundo campo). */
+      repeat?: string;
       onConfirm: (value: string) => Promise<void> | void;
     }
   | {
@@ -28,6 +32,8 @@ export function Dialog({ request, onClose }: Props) {
     request.kind === "prompt" ? (request.initial ?? "") : "",
   );
   const [busy, setBusy] = useState(false);
+  const [again, setAgain] = useState("");
+  const [mismatch, setMismatch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
@@ -44,9 +50,13 @@ export function Dialog({ request, onClose }: Props) {
     e.preventDefault();
     if (busy) return;
     if (request.kind === "prompt" && !value.trim()) return;
+    if (request.kind === "prompt" && request.repeat && value !== again) {
+      setMismatch(true);
+      return;
+    }
     setBusy(true);
     try {
-      if (request.kind === "prompt") await request.onConfirm(value.trim());
+      if (request.kind === "prompt") await request.onConfirm(request.password ? value : value.trim());
       else await request.onConfirm();
     } finally {
       setBusy(false);
@@ -76,11 +86,25 @@ export function Dialog({ request, onClose }: Props) {
             <input
               ref={inputRef}
               value={value}
+              type={request.password ? "password" : "text"}
               onChange={(e) => setValue(e.target.value)}
               className="mt-1.5 block w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-neutral-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
             />
           </label>
-        ) : (
+        ) : null}
+        {request.kind === "prompt" && request.repeat ? (
+          <label className="mt-3 block text-sm text-neutral-500">
+            {request.repeat}
+            <input
+              value={again}
+              type="password"
+              onChange={(e) => (setAgain(e.target.value), setMismatch(false))}
+              className="mt-1.5 block w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-neutral-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            />
+            {mismatch && <span className="mt-1 block text-xs text-red-600 dark:text-red-400">No coinciden.</span>}
+          </label>
+        ) : null}
+        {request.kind === "prompt" ? null : (
           <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
             {request.message}
           </p>

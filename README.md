@@ -45,7 +45,7 @@ Escribe `/` al principio de una línea vacía para abrir el menú de bloques. Pu
 | Texto | Texto, Título 1–6, Cita, Separador |
 | Listas | Lista con viñetas, Lista numerada, Lista de tareas |
 | Avanzado | Código, Tabla, Fórmula |
-| Botion | Página (crea una nota y la enlaza), Mención, Nota de hoy, Imagen, Vídeo, Audio, Archivo (los PDF se ven en la nota), YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Bloque sincronizado, Vista de base de datos, Botón, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Color, Comentario, Nota al pie, 2 columnas, 3 columnas, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual, Fecha de vencimiento, Recordatorio, Repetir tarea, Ancho completo, Texto pequeño, Fuente (normal, serif, monoespaciada), Índice lateral, Modo sin distracciones |
+| Botion | Página (crea una nota y la enlaza), Mención, Nota de hoy, Imagen, Vídeo, Audio, Archivo (los PDF se ven en la nota), YouTube, Emoji, Icono de la página, Portada, Incrustar nota, Bloque sincronizado, Vista de base de datos, Botón, Enlace a nota, Propiedad, Base de datos, Plantilla, Aviso (nota, consejo, aviso, peligro), Desplegable, Índice, Resaltar, Color, Comentario, Nota al pie, 2 columnas, 3 columnas, Diagrama, Exportar a PDF, Exportar a HTML, Fecha de hoy, Hora actual, Fecha de vencimiento, Recordatorio, Repetir tarea, Ancho completo, Texto pequeño, Fuente (normal, serif, monoespaciada), Índice lateral, Modo sin distracciones, Atajos de Vim, Cifrar nota, Recortar web |
 
 Todo se guarda con sintaxis compatible con Obsidian:
 
@@ -69,6 +69,8 @@ Todo se guarda con sintaxis compatible con Obsidian:
 | Tarea con fecha | `- [ ] Pagar 📅 2026-10-31 ⏰ 2026-10-30 09:00 🔁 cada mes` (como el plugin Tasks) |
 | Bloque sincronizado | `![[Nota#^abc123]]`; el bloque original acaba en ` ^abc123` |
 | Botón | bloque de código `boton` con `texto:`, `base:`, `plantilla:`, `abrir:` y propiedades |
+| Nota cifrada | bloque de código `botion-cifrado` (AES-GCM); las propiedades no se cifran |
+| Página recortada | nota en `Recortes/` con `fuente:` y `recortado:` en el frontmatter |
 
 ### Atajos
 
@@ -107,6 +109,9 @@ En macOS, `Cmd` en lugar de `Ctrl`.
 - **Comentarios:** botón «Comentar» de la barra o `/Comentario`. Se ven como 💬 en el texto y, si hay sitio, en el margen derecho.
 - **Bloques sincronizados:** asa ⋮⋮ → «Copiar como bloque sincronizado» y pega en otra nota, o `/Bloque sincronizado` para elegir nota y bloque. Al editarlo en cualquier sitio cambia en la nota original.
 - **PDF:** `/Archivo` con un PDF lo muestra en la nota. Selecciona texto y pulsa «Subrayar»; los subrayados se guardan en «nombre (subrayados).md», junto al PDF, y cada uno se puede incrustar en otra nota.
+- **Recortar web:** paleta de comandos → «Recortar página web» o `/Recortar web`. Descarga la página, se queda con el artículo (sin menús ni anuncios) y lo guarda en Markdown en `Recortes/`, con la dirección de origen. Las imágenes siguen en la web.
+- **Notas cifradas:** `/Cifrar nota` o la paleta. Pide una contraseña; en disco solo queda el texto cifrado (AES-GCM, clave derivada con PBKDF2). Al abrirla pide la contraseña, que se recuerda hasta cerrar la app; el candado de arriba la bloquea otra vez y «Quitar el cifrado» la deja normal. **Si olvidas la contraseña, no se puede recuperar.**
+- **Atajos de Vim:** `/Atajos de Vim` o la paleta. Modo normal: `h j k l`, `w b e`, `0 ^ $`, `gg G`, `x`, `dd`, `u`, `Ctrl+R`; para escribir: `i a I A o O`; `Esc` vuelve a normal. Abajo se ve el modo.
 - **Fechas en lenguaje natural:** en `@`, `/Fecha de vencimiento` y `/Recordatorio` vale escribir «mañana», «el viernes», «dentro de 3 días», «15 de noviembre a las 18:30»…
 
 ### Tareas y recordatorios
@@ -305,9 +310,9 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 - [x] Plantillas por base de datos y botones que crean filas.
 - [x] Bloques sincronizados (el mismo bloque en varias notas).
 - [x] Ver PDFs dentro de la nota y subrayarlos.
-- [ ] Recortador web: guardar una página como nota.
-- [ ] Notas cifradas con contraseña.
-- [ ] Atajos de Vim opcionales.
+- [x] Recortador web: guardar una página como nota.
+- [x] Notas cifradas con contraseña.
+- [x] Atajos de Vim opcionales.
 - [ ] Sincronización sin Git (carpeta en la nube, WebDAV, Syncthing) con avisos de conflicto.
 - [ ] App para el móvil que abra la misma bóveda.
 

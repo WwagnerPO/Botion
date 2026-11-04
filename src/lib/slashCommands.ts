@@ -290,9 +290,11 @@ export interface SlashHandlers {
   editComment: (pos: number) => void;
   /** Pide una nota y un bloque suyo; llama a `insert` con `Nota#^id`. */
   requestBlockRef: (insert: (target: string) => void) => void;
+  /** Pide una dirección web, la guarda como nota y llama a `insert` con su enlace. */
+  requestClip: (insert: (target: string) => void) => void;
 }
 
-export type PageAction = "wide" | "small" | "font-normal" | "font-serif" | "font-mono" | "focus" | "outline";
+export type PageAction = "wide" | "small" | "font-normal" | "font-serif" | "font-mono" | "focus" | "outline" | "vim" | "encrypt";
 
 type MenuBuilder = {
   addGroup: (
@@ -415,6 +417,14 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       onRun: (ctx) => {
         clearSlash(ctx);
         handlers.requestBlockRef((target) => insertEmbed(ctx, target));
+      },
+    });
+    group.addItem("web-clip", {
+      label: "Recortar web",
+      icon: icon('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>'),
+      onRun: (ctx) => {
+        clearSlash(ctx);
+        handlers.requestClip((target) => insertWikiLink(ctx, target));
       },
     });
     group.addItem("database-view", {
@@ -587,6 +597,8 @@ export function buildBotionMenu(handlers: SlashHandlers) {
       { key: "font-mono", label: "Fuente: monoespaciada", icon: icon('<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/>') },
       { key: "outline", label: "Índice lateral", icon: tocIcon },
       { key: "focus", label: "Modo sin distracciones", icon: icon('<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>') },
+      { key: "vim", label: "Atajos de Vim", icon: icon('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10l2 4 2-4M13 10v4M16 14v-4l1.5 2 1.5-2v4"/>') },
+      { key: "encrypt", label: "Cifrar nota", icon: icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>') },
     ];
     for (const a of pageActions) {
       group.addItem(`page-${a.key}`, {

@@ -30,6 +30,7 @@ serde_yaml_ng = "0.10.0"
 percent-encoding = "2.3.2"
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
+ureq = "3"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

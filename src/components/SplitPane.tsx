@@ -1,6 +1,7 @@
 import { ArrowLeftToLine, FileText, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { joinFrontmatter, splitFrontmatter } from "../lib/frontmatter";
+import { isEncrypted } from "../lib/crypto";
 import { readNote, writeNote } from "../lib/vault";
 import { Editor, type EditorProps } from "./Editor";
 
@@ -99,7 +100,10 @@ export function SplitPane({ path, icon, editorProps, onClose, onOpenMain, onErro
         </button>
       </div>
       <div className="flex-1 overflow-y-auto pt-6">
-        {note && (
+        {note && isEncrypted(note.body) && (
+          <p className="mx-14 text-sm text-neutral-500">🔒 Nota cifrada. Ábrela en el panel principal para escribir su contraseña.</p>
+        )}
+        {note && !isEncrypted(note.body) && (
           <Editor
             key={path}
             {...editorProps}

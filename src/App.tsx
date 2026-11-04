@@ -1,4 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { decryptBody, decryptWithKey, encryptBody, isEncrypted, newKey, type NoteKey } from "./lib/crypto";
+import { CLIPS_FOLDER, clipPage } from "./lib/clip";
+import { LockedNote } from "./components/LockedNote";
 import { invoke } from "@tauri-apps/api/core";
 import {
   AlarmClock,
@@ -119,6 +122,10 @@ interface Note {
   body: string;
   /** Cambia al recargar la nota desde disco, para reiniciar el editor. */
   version: number;
+  /** Nota cifrada: se guarda cifrada con la clave de la sesión. */
+  encrypted?: boolean;
+  /** Cifrada y aún sin contraseña: no se puede ver ni editar. */
+  locked?: boolean;
 }
 
 const STATUS_TEXT: Record<SaveStatus, string> = {
@@ -189,6 +196,7 @@ export default function App() {
   const closePageMenu = useCallback(() => setPageMenu(null), []);
   const [outlineOn, setOutlineOn] = useStoredFlag("indice-lateral");
   const [focus, setFocus] = useStoredFlag("sin-distracciones");
+  const [vim, setVim] = useStoredFlag("vim");
   const noteScroll = useRef<HTMLDivElement>(null);
   /** Tareas con fecha de la bóveda (para el panel y los recordatorios). */
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -233,9 +241,13 @@ export default function App() {
   const editorFlush = useRef<(() => void) | null>(null);
   const splitFlush = useRef<(() => Promise<void>) | null>(null);
   /** Guarda ya todo lo pendiente de la nota abierta. */
+  /** Claves de las notas cifradas abiertas en esta sesión (nunca en disco). */
+  const noteKeys = useRef(new Map<string, NoteKey>());
+  /** Cifrados en curso antes de guardar, en orden. */
+  const encrypting = useRef<Promise<void>>(Promise.resolve());
   const flushEdits = useCallback(() => {
     editorFlush.current?.();
-    return autosaver.flush();
+    return encrypting.current.then(() => autosaver.flush());
   }, [autosaver]);
   const noteRef = useRef(note);
   noteRef.current = note;
@@ -414,9 +426,24 @@ export default function App() {
         getProperties(path).catch(() => ({})),
       ]);
       knownContent.current = { path, content };
+      const parts = splitFrontmatter(content);
+      // Nota cifrada: se descifra si ya se dio la contraseña en esta sesión.
+      let locked = false;
+      const encrypted = isEncrypted(parts.body);
+      if (encrypted) {
+        const key = noteKeys.current.get(path);
+        try {
+          if (!key) throw new Error();
+          parts.body = await decryptWithKey(parts.body, key);
+        } catch {
+          locked = true;
+        }
+      }
       setNote((prev) => ({
         path,
-        ...splitFrontmatter(content),
+        ...parts,
+        encrypted,
+        locked,
         version: (prev?.version ?? 0) + 1,
       }));
       setBacklinks(links);
@@ -680,6 +707,10 @@ export default function App() {
       await printNote();
       return;
     }
+    if (current.encrypted) {
+      setNotice("Las notas cifradas no se exportan a HTML (quedaría el texto sin cifrar en otro fichero).");
+      return;
+    }
     await run(async () => {
       const name = current.path.split("/").pop()!.replace(/\.md$/, "");
       const html = await noteToHtml(name, await readNote(current.path), props, (src) =>
@@ -710,6 +741,97 @@ export default function App() {
     run(async () => openFrom(await ensureDailyNote(), e));
   }
 
+  // --- Notas cifradas ---
+
+  /** Pide una contraseña y cifra la nota abierta. */
+  function encryptNote() {
+    const current = noteRef.current;
+    if (!current || current.encrypted) {
+      if (current?.encrypted) setNotice("Esta nota ya está cifrada.");
+      return;
+    }
+    setDialog({
+      kind: "prompt",
+      title: "Cifrar nota",
+      label: "Contraseña (si la olvidas, la nota no se puede recuperar)",
+      repeat: "Repítela",
+      password: true,
+      confirm: "Cifrar",
+      onConfirm: (password) =>
+        run(async () => {
+          const key = await newKey(password);
+          await flushEdits();
+          const { frontmatter, body } = splitFrontmatter(await readNote(current.path));
+          const content = joinFrontmatter(frontmatter, await encryptBody(body, key));
+          await writeNote(current.path, content);
+          knownContent.current = { path: current.path, content };
+          noteKeys.current.set(current.path, key);
+          setNote((n) => (n && n.path === current.path ? { ...n, frontmatter, encrypted: true } : n));
+          setNotice("Nota cifrada. En disco solo se guarda el texto cifrado; las propiedades no se cifran.");
+        }),
+    });
+  }
+
+  async function unlockNote(password: string) {
+    const current = noteRef.current;
+    if (!current?.locked) return;
+    const { text, key } = await decryptBody(current.body, password);
+    noteKeys.current.set(current.path, key);
+    setNote((n) => (n && n.path === current.path ? { ...n, body: text, locked: false, version: n.version + 1 } : n));
+  }
+
+  /** Vuelve a pedir la contraseña (olvida la clave de la sesión). */
+  async function lockNote() {
+    const current = noteRef.current;
+    if (!current?.encrypted) return;
+    await flushEdits();
+    noteKeys.current.delete(current.path);
+    await openNote(current.path, true);
+  }
+
+  /** Guarda la nota sin cifrar. */
+  async function decryptNote() {
+    const current = noteRef.current;
+    const key = current && noteKeys.current.get(current.path);
+    if (!current?.encrypted || !key) return;
+    await run(async () => {
+      await flushEdits();
+      const { frontmatter, body } = splitFrontmatter(await readNote(current.path));
+      const content = joinFrontmatter(frontmatter, await decryptWithKey(body, key));
+      await writeNote(current.path, content);
+      knownContent.current = { path: current.path, content };
+      noteKeys.current.delete(current.path);
+      setNote((n) => (n && n.path === current.path ? { ...n, encrypted: false } : n));
+      setNotice("La nota ya no está cifrada.");
+    });
+  }
+
+  // --- Recortador web ---
+
+  /** Pide una dirección, guarda la página en «Recortes/» y la abre (o la enlaza). */
+  function clipWeb(insert?: (target: string) => void) {
+    setDialog({
+      kind: "prompt",
+      title: "Recortar página web",
+      label: "Dirección (https://…)",
+      initial: "",
+      confirm: "Guardar",
+      onConfirm: (url) =>
+        run(async () => {
+          setNotice("Descargando la página…");
+          const clip = await clipPage(url);
+          let name = `${CLIPS_FOLDER}/${clip.name}`;
+          for (let i = 2; notePaths.includes(`${name}.md`); i++) name = `${CLIPS_FOLDER}/${clip.name} ${i}`;
+          const path = await createNote(name);
+          await writeNote(path, clip.content);
+          await reloadTree();
+          setNotice(`Guardada «${clip.title}» en ${CLIPS_FOLDER}.`);
+          if (insert) insert(linkTarget(path));
+          else await openNote(path);
+        }),
+    });
+  }
+
   /** Estilo de la página y vistas (menú «…» y comandos «/»). */
   function pageAction(action: PageAction) {
     const style = pageStyle(props);
@@ -728,6 +850,14 @@ export default function App() {
         return setOutlineOn((on) => !on);
       case "focus":
         return setFocus((on) => !on);
+      case "vim":
+        setVim((on) => {
+          setNotice(on ? "Atajos de Vim desactivados." : "Atajos de Vim activados: Esc para modo normal, i para escribir.");
+          return !on;
+        });
+        return;
+      case "encrypt":
+        return encryptNote();
     }
   }
 
@@ -830,7 +960,15 @@ export default function App() {
   const handleChange = useCallback(
     (body: string) => {
       const current = noteRef.current;
-      if (!current) return;
+      if (!current || current.locked) return;
+      if (current.encrypted) {
+        const key = noteKeys.current.get(current.path);
+        if (!key) return;
+        encrypting.current = encrypting.current.then(async () =>
+          autosaver.schedule(current.path, joinFrontmatter(current.frontmatter, await encryptBody(body, key))),
+        );
+        return;
+      }
       autosaver.schedule(
         current.path,
         joinFrontmatter(current.frontmatter, body),
@@ -1069,6 +1207,14 @@ export default function App() {
     { id: "focus", name: focus ? "Salir del modo sin distracciones" : "Modo sin distracciones", hint: "Ctrl+.", run: () => setFocus((f) => !f) },
     { id: "outline", name: outlineOn ? "Ocultar el índice lateral" : "Mostrar el índice lateral", needsNote: true, run: () => setOutlineOn((o) => !o) },
     { id: "wide", name: "Ancho completo", needsNote: true, run: () => pageAction("wide") },
+    { id: "vim", name: vim ? "Desactivar atajos de Vim" : "Activar atajos de Vim", run: () => pageAction("vim") },
+    { id: "clip", name: "Recortar página web", run: () => clipWeb() },
+    ...(note?.encrypted
+      ? [
+          { id: "lock", name: "Bloquear nota cifrada", needsNote: true, run: () => lockNote() },
+          { id: "decrypt", name: "Quitar el cifrado de la nota", needsNote: true, run: () => decryptNote() },
+        ]
+      : [{ id: "encrypt", name: "Cifrar nota con contraseña", needsNote: true, run: () => encryptNote() }]),
     { id: "small", name: "Texto pequeño", needsNote: true, run: () => pageAction("small") },
     { id: "font-normal", name: "Fuente: normal", needsNote: true, run: () => pageAction("font-normal") },
     { id: "font-serif", name: "Fuente: serif", needsNote: true, run: () => pageAction("font-serif") },
@@ -1256,13 +1402,16 @@ export default function App() {
       }),
       onAddCover: onlyMain,
       onRequestMention: (insert: (m: Mention) => void) => setMentionRequest(() => insert),
-      onPageAction: (action: PageAction) => (action === "focus" || action === "outline" ? pageAction(action) : onlyMain()),
+      onPageAction: (action: PageAction) =>
+        action === "focus" || action === "outline" || action === "vim" ? pageAction(action) : onlyMain(),
       onRequestDailyNote: (insert: (target: string) => void) =>
         run(async () => insert(linkTarget(await ensureDailyNote()))),
       onRequestDate: (title: string, withTime: boolean, insert: (date: string, time: string | null) => void) =>
         setDateRequest({ title, withTime, insert }),
       onRequestRepeat: (insert: (rule: string) => void) => setRepeatRequest(() => insert),
       onButton: runButton,
+      vim,
+      onRequestClip: (insert: (target: string) => void) => clipWeb(insert),
       onRequestBlockRef: (insert: (target: string) => void) => requestBlockRef(insert, path),
       onRequestUrl: (title: string, insert: (url: string) => void) =>
         setDialog({ kind: "prompt", title, label: "Dirección (https://…)", initial: "", confirm: "Insertar", onConfirm: (url) => insert(url) }),
@@ -1370,6 +1519,7 @@ export default function App() {
               onToggleFavorite={() => toggleFavorite(note.path)}
               onHistory={() => setHistoryOpen(true)}
               onMore={(e) => setPageMenu(e.currentTarget)}
+              onLock={note.encrypted && !note.locked ? lockNote : undefined}
               focus={focus}
               path={note.path}
               icon={noteIcon}
@@ -1418,6 +1568,9 @@ export default function App() {
                 onRemove={(key) => changeProperty(key, null)}
                 onAdd={addProperty}
               />
+              {note.locked ? (
+                <LockedNote onUnlock={unlockNote} />
+              ) : (
               <Editor
                 key={`${note.path}#${note.version}`}
                 initialValue={note.body}
@@ -1457,6 +1610,8 @@ export default function App() {
                 onRequestDate={(title, withTime, insert) => setDateRequest({ title, withTime, insert })}
                 onRequestRepeat={(insert) => setRepeatRequest(() => insert)}
                 onButton={runButton}
+                vim={vim}
+                onRequestClip={(insert) => clipWeb(insert)}
                 onRequestBlockRef={(insert) => requestBlockRef(insert, note.path)}
                 onRequestUrl={(title, insert) =>
                   setDialog({
@@ -1469,6 +1624,7 @@ export default function App() {
                   })
                 }
               />
+              )}
               {!focus && <Backlinks backlinks={backlinks} onSelect={(path) => openNote(path)} />}
             </div>
             {outlineOn && !focus && (

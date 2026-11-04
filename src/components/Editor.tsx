@@ -36,6 +36,7 @@ import { parseButton, type ButtonSpec } from "../lib/button";
 import { buildBotionMenu, type PageAction } from "../lib/slashCommands";
 import { docStats, type DocStats } from "../lib/outline";
 import { taskDates } from "../lib/taskDates";
+import { vimKey, vimPlugin, type VimMode } from "../lib/vim";
 import { setTextColor, textColor } from "../lib/textColor";
 import { comments } from "../lib/comments";
 import { insertComment } from "../lib/slashCommands";
@@ -95,6 +96,10 @@ export interface EditorProps {
   onRequestDate: (title: string, withTime: boolean, insert: (date: string, time: string | null) => void) => void;
   /** Comando «/Repetir tarea». */
   onRequestRepeat: (insert: (rule: string) => void) => void;
+  /** Atajos de Vim activados. */
+  vim?: boolean;
+  /** Comando «/Recortar web». */
+  onRequestClip: (insert: (target: string) => void) => void;
   /** Comando «/Bloque sincronizado»: elegir nota y bloque. */
   onRequestBlockRef: (insert: (target: string) => void) => void;
   /** Al pulsar un botón (bloque ```boton). */
@@ -138,7 +143,12 @@ export function Editor({
   onRequestRepeat,
   onButton,
   onRequestBlockRef,
+  vim = false,
+  onRequestClip,
 }: EditorProps) {
+  const vimRef = useRef(vim);
+  vimRef.current = vim;
+  const [vimMode, setVimMode] = useState<VimMode | null>(null);
   const [blockMenu, setBlockMenu] = useState<{ anchor: HTMLElement; pos: number } | null>(null);
   const [colorMenu, setColorMenu] = useState<{ anchor: DOMRect; from: number; to: number } | null>(null);
   /** Comentarios `%%…%%` de la nota y el que se está editando. */
@@ -149,8 +159,8 @@ export function Editor({
     y: number;
     pick: (emoji: string) => void;
   } | null>(null);
-  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl, onRequestMention, onPageAction, onRequestDailyNote, onStats, onRequestDate, onRequestRepeat, onButton, onRequestBlockRef });
-  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl, onRequestMention, onPageAction, onRequestDailyNote, onStats, onRequestDate, onRequestRepeat, onButton, onRequestBlockRef };
+  const pageRef = useRef({ onSetPageIcon, onAddCover, onRequestUrl, onRequestMention, onPageAction, onRequestDailyNote, onStats, onRequestDate, onRequestRepeat, onButton, onRequestBlockRef, onRequestClip });
+  pageRef.current = { onSetPageIcon, onAddCover, onRequestUrl, onRequestMention, onPageAction, onRequestDailyNote, onStats, onRequestDate, onRequestRepeat, onButton, onRequestBlockRef, onRequestClip };
   const rootRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -291,6 +301,7 @@ export function Editor({
             requestColor: (at, from, to) => setColorMenu({ anchor: new DOMRect(at.x, at.y - 6, 0, 0), from, to }),
             editComment: (pos) => setEditingComment(pos),
             requestBlockRef: (insert) => pageRef.current.onRequestBlockRef(insert),
+            requestClip: (insert) => pageRef.current.onRequestClip(insert),
             pickAttachment: async (accept) => {
               const file = await pickFile(accept);
               if (!file) return null;
@@ -471,7 +482,7 @@ export function Editor({
         }),
     );
 
-    crepe.editor.use(stats).use(taskDates).use(textColor).use(comments).use(mentions).use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
+    crepe.editor.use(vimPlugin(() => vimRef.current, setVimMode)).use(stats).use(taskDates).use(textColor).use(comments).use(mentions).use(findPlugin).use(imageView).use(embed).use(embedView).use(callout).use(highlight).use(wikiLink).use(wikiLinkStatus(() => linkExistsRef.current));
 
     // Mismo estilo que la mayoría de editores: "- lista" y "---".
     crepe.editor.config((ctx) => {
@@ -510,6 +521,14 @@ export function Editor({
     // Solo al montar: el contenido inicial no debe recrear el editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Al activar o quitar los atajos de Vim, el editor se repinta (cursor y modo).
+  useEffect(() => {
+    crepeRef.current?.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.setMeta(vimKey, { mode: "normal", pending: "" }));
+    });
+  }, [vim]);
 
   // Al cambiar las notas de la bóveda, vuelve a marcar los enlaces rotos.
   useEffect(() => {
@@ -583,6 +602,16 @@ export function Editor({
       )}
       <div className="relative">
       <div ref={rootRef} className="botion-editor" onClick={handleClick} />
+      {vimMode && (
+        <span
+          aria-live="polite"
+          className={`no-print fixed bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-md px-2 py-0.5 font-mono text-xs font-semibold shadow-pop ${
+            vimMode === "normal" ? "bg-violet-600 text-white" : "bg-emerald-600 text-white"
+          }`}
+        >
+          {vimMode === "normal" ? "-- NORMAL --" : "-- INSERTAR --"}
+        </span>
+      )}
       <CommentMargin
         root={rootRef.current}
         comments={noteComments}
