@@ -13,6 +13,8 @@ interface Props {
 
 const ORDER: Bucket[] = ["overdue", "today", "week", "later"];
 const noteName = (p: string) => p.split("/").pop()!.replace(/\.md$/i, "");
+/** Texto de la tarea sin los corchetes de los enlaces (`[[Ana]]` → «Ana»). */
+const plain = (t: string) => t.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => alias ?? target.split("/").pop());
 
 /** Tareas con fecha de toda la bóveda: vencidas, hoy, próximas y más adelante. */
 export function TasksPanel({ tasks, iconOf, onToggle, onOpen, onClose }: Props) {
@@ -76,7 +78,7 @@ export function TasksPanel({ tasks, iconOf, onToggle, onOpen, onClose }: Props) 
                       />
                       <button type="button" onClick={() => onOpen(t.path)} className="min-w-0 flex-1 text-left text-sm">
                         <span className={t.done ? "text-neutral-400 line-through" : "text-neutral-800 dark:text-neutral-100"}>
-                          {t.text || "(sin texto)"}
+                          {plain(t.text) || "(sin texto)"}
                         </span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-neutral-400">
                           <span className="truncate">
