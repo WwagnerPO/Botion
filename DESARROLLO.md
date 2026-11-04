@@ -2,6 +2,15 @@
 
 Cómo compilar, probar y publicar la app. Para usarla, ver el [README](README.md).
 
+## Índice
+
+- [Requisitos](#requisitos)
+- [Arrancar](#arrancar)
+- [Publicar una versión](#publicar-una-versión)
+- [Actualizaciones automáticas](#actualizaciones-automáticas)
+- [Firmar los instaladores (opcional)](#firmar-los-instaladores-opcional)
+- [Estructura](#estructura)
+
 ## Requisitos
 
 1. [Node.js](https://nodejs.org) 20 o superior.

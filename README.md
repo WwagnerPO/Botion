@@ -8,6 +8,30 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 
 ![Una nota con portada, icono, avisos y tareas con fecha](docs/capturas/nota.png)
 
+## Índice
+
+- [Capturas](#capturas)
+- [Qué hace](#qué-hace)
+- [Uso](#uso)
+  - [macOS: «Botion está dañado y no se puede abrir»](#macos-botion-está-dañado-y-no-se-puede-abrir)
+  - [Comandos /](#comandos-)
+  - [Atajos](#atajos)
+  - [Navegación](#navegación)
+  - [Escribir](#escribir)
+  - [Tareas y recordatorios](#tareas-y-recordatorios)
+  - [Icono y portada](#icono-y-portada)
+  - [Imágenes, archivos y exportar](#imágenes-archivos-y-exportar)
+  - [Organizar](#organizar)
+  - [Bases de datos](#bases-de-datos)
+  - [Plantillas](#plantillas)
+  - [Sincronizar sin Git](#sincronizar-sin-git)
+  - [Importar desde Notion](#importar-desde-notion)
+  - [Sincronización con Git](#sincronización-con-git)
+- [Pendiente](#pendiente)
+- [Desarrollo](#desarrollo)
+- [Licencia](#licencia)
+  - [Contribuciones](#contribuciones)
+
 ## Capturas
 
 | | |
