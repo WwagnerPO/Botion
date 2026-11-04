@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, History, MoreHorizontal, Share, Star } from "lucide-react";
+import { ChevronRight, FileText, History, Lock, MoreHorizontal, Share, Star } from "lucide-react";
 
 interface Props {
   path: string;
@@ -14,6 +14,8 @@ interface Props {
   onMore: (e: React.MouseEvent<HTMLButtonElement>) => void;
   /** En modo sin distracciones la barra solo se ve al pasar el ratón. */
   focus: boolean;
+  /** Nota cifrada abierta: botón para bloquearla otra vez. */
+  onLock?: () => void;
 }
 
 /** Barra fija sobre la nota: dónde está, si se ha guardado y exportar. */
@@ -29,6 +31,7 @@ export function NoteTopBar({
   onHistory,
   onMore,
   focus,
+  onLock,
 }: Props) {
   const iconButton =
     "grid size-7 shrink-0 place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-100";
@@ -74,6 +77,11 @@ export function NoteTopBar({
       <span aria-live="polite" className="shrink-0 text-xs text-neutral-400">
         {status}
       </span>
+      {onLock && (
+        <button type="button" onClick={onLock} className={iconButton} title="Nota cifrada: bloquear" aria-label="Bloquear nota cifrada">
+          <Lock className="size-4 text-violet-500" />
+        </button>
+      )}
       <button type="button" onClick={onHistory} className={iconButton} title="Historial de versiones" aria-label="Historial de versiones">
         <History className="size-4" />
       </button>

@@ -583,3 +583,6 @@ svg.botion-icon * {
 .botion-editor .textLayer .markedContent { display: contents; }
 .botion-editor .textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default; user-select: none; }
 .botion-editor .textLayer.selecting .endOfContent { top: 0; }
+
+/* Atajos de Vim: en modo normal el cursor es más visible. */
+.botion-editor .ProseMirror.vim-normal { caret-color: #7c3aed; caret-shape: block; }

@@ -8,6 +8,7 @@ mod links;
 mod props;
 mod tasks;
 mod vault;
+mod web;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,6 +48,7 @@ pub fn run() {
             git::git_save_version,
             index::get_graph,
             tasks::list_tasks,
+            web::fetch_page,
             attachments::save_attachment,
             attachments::open_in_system,
             attachments::read_attachment,

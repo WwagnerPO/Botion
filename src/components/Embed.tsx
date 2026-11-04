@@ -10,6 +10,7 @@ import { PAGE_KEYS } from "../lib/cover";
 import { ChartView } from "./ChartView";
 import { PdfViewer } from "./PdfViewer";
 import { blockText, replaceBlock, sectionText, splitTarget } from "../lib/blockRefs";
+import { isEncrypted } from "../lib/crypto";
 import { CellView } from "./PropertyInput";
 
 /** Lo que una incrustación necesita de la app. */
@@ -91,6 +92,10 @@ function NoteEmbed({ target, host }: { target: string; host: EmbedHost }) {
           return;
         }
         const content = await host.readNote(path);
+        if (isEncrypted(content)) {
+          if (current) setState({ kind: "note", path, html: "<p>🔒 Nota cifrada.</p>" });
+          return;
+        }
         const { block, section } = splitTarget(target);
         // ![[Nota#^id]]: un bloque, que se puede editar desde aquí.
         if (block) {
