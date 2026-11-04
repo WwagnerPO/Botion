@@ -87,14 +87,13 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BOTION_UPDATER_PUBKEY: ${{ vars.BOTION_UPDATER_PUBKEY }}
         shell: bash
         run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] || [ -z "$BOTION_UPDATER_PUBKEY" ]; then
-            echo "Sin clave de firma: esta versión no se actualizará sola."
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "Sin clave de firma: no se publica la actualización automática."
             exit 0
           fi
-          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD BOTION_UPDATER_PUBKEY; do
+          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
             { echo "$name<<FIN_DE_SECRETO"; echo "${!name}"; echo "FIN_DE_SECRETO"; } >> "$GITHUB_ENV"
           done
           echo "UPDATER_ARGS=--config src-tauri/tauri.updater.conf.json" >> "$GITHUB_ENV"

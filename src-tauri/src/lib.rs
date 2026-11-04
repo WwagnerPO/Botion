@@ -12,13 +12,16 @@ mod vault;
 mod web;
 mod webdav;
 
-/// Clave pública para comprobar las actualizaciones (variable de la compilación).
-const UPDATER_PUBKEY: Option<&str> = option_env!("BOTION_UPDATER_PUBKEY");
-
-/// Si esta versión puede actualizarse sola.
+/// Si esta versión puede actualizarse sola (tiene la clave pública en tauri.conf.json).
 #[tauri::command]
-fn updater_enabled() -> bool {
-    UPDATER_PUBKEY.is_some_and(|k| !k.trim().is_empty())
+fn updater_enabled(app: tauri::AppHandle) -> bool {
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|u| u.get("pubkey"))
+        .and_then(|k| k.as_str())
+        .is_some_and(|k| !k.trim().is_empty())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,12 +30,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        // Actualizaciones: la clave pública llega al compilar (ver README).
-        .plugin(
-            tauri_plugin_updater::Builder::new()
-                .pubkey(UPDATER_PUBKEY.unwrap_or(""))
-                .build(),
-        )
+        // Actualizaciones firmadas (ver README): la clave pública está en tauri.conf.json.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![

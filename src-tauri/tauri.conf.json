@@ -44,7 +44,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA2OTQ5MDEyOUZEOUU0QzgKUldUSTVObWZFcENVQmxadzdsQ1dKV3NwdVU1WFQrV1BvMUlGQjdVR0tZd2QxclJzeGpkSVVTdU8K",
       "endpoints": [
         "https://github.com/WwagnerPO/Botion/releases/latest/download/latest.json"
       ]

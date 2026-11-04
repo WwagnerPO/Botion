@@ -2,7 +2,9 @@
 
 App de escritorio local para tomar notas, inspirada en [Notion](https://www.notion.so) y [Obsidian](https://obsidian.md). Tus notas son ficheros `.md` normales en una carpeta de tu ordenador, con funciones tipo Notion: editor visual, enlaces entre notas y bases de datos con varias vistas.
 
-> Estado: **primera versión completa** (todas las fases de la hoja de ruta).
+- **Local:** sin cuenta, sin servidor y sin internet. Para Windows, macOS y Linux.
+- **Tus datos son tuyos:** notas Markdown normales, compatibles con Obsidian.
+- **Descargar:** última versión en [Releases](https://github.com/WwagnerPO/Botion/releases/latest).
 
 ![Una nota con portada, icono, avisos y tareas con fecha](docs/capturas/nota.png)
 
@@ -17,24 +19,27 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 | ![Tema oscuro con el índice lateral](docs/capturas/oscuro.png) | ![Grafo de enlaces entre notas](docs/capturas/grafo.png) |
 | **Tema oscuro** e índice lateral | **Grafo** de enlaces |
 
-## Principios
+## Qué hace
 
-- **Local primero:** funciona sin internet, sin servidor y sin cuenta.
-- **Tus datos son tuyos:** todo se guarda en ficheros Markdown que puedes abrir con cualquier editor.
-- **Ligera:** app de escritorio pequeña y rápida para Windows, macOS y Linux.
+- Editor visual con comandos `/`, enlaces `[[nota]]`, menciones `@`, backlinks, pestañas, vista dividida y grafo.
+- Bases de datos: cada carpeta es una tabla y cada nota una fila. Vistas de tabla, kanban, calendario, galería, lista, cronograma y gráfico, con filtros, fórmulas, relaciones y colores.
+- Tareas con fecha, recordatorios y repeticiones; nota diaria; fechas en lenguaje natural.
+- PDF con subrayados, bloques sincronizados, comentarios, colores, columnas y notas al pie.
+- Notas cifradas, recortador web, atajos de Vim, importar desde Notion.
+- Sincronización con Git, WebDAV o una carpeta en la nube, con historial y conflictos resueltos en la app.
+- Se actualiza sola.
 
-## Funciones previstas
+## Uso
 
-- Bóveda: abrir una carpeta y navegar por su árbol de notas.
-- Crear, renombrar y borrar notas y carpetas; al renombrar se actualizan los enlaces.
-- Editor visual de Markdown con autoguardado.
-- Enlaces entre notas `[[nota]]` y backlinks.
-- Búsqueda rápida en todas las notas (`Ctrl+K`), sin distinguir tildes.
-- Bases de datos: una carpeta es una base de datos, cada nota es una fila y sus propiedades van en el frontmatter YAML.
-- Vistas de tabla, kanban, calendario, galería, lista, cronograma y gráfico, con filtros, fórmulas, relaciones y colores.
-- Plantillas.
-- Tema claro, oscuro o el del sistema.
-- Sincronización opcional con Git.
+### macOS: «Botion está dañado y no se puede abrir»
+
+Pasa con las apps descargadas que no tienen certificado de Apple. No está dañada: macOS la bloquea por venir de internet.
+
+1. Mueve `Botion.app` a **Aplicaciones**.
+2. Abre **Terminal** y ejecuta: `xattr -cr /Applications/Botion.app`
+3. Ábrela normalmente.
+
+La app va firmada «ad hoc» (sin certificado): si aun así avisa, clic derecho en Botion → **Abrir** → **Abrir**.
 
 ### Comandos `/`
 
@@ -240,99 +245,11 @@ Si dos ordenadores cambian la misma parte de una nota, Botion pregunta qué hace
 
 Lo que no choca se une solo.
 
-### Ejemplo de nota con propiedades
+## Pendiente
 
-```markdown
----
-estado: En curso
-prioridad: Alta
-fecha: 2026-10-20
-etiquetas: [botion, diseño]
----
-
-# Diseñar la vista kanban
-
-Contenido normal en Markdown...
-```
-
-## Stack previsto
-
-| Capa | Tecnología |
-|------|------------|
-| App de escritorio | [Tauri](https://tauri.app) (Rust) |
-| Interfaz | React, TypeScript, Tailwind CSS |
-| Editor | [Milkdown](https://milkdown.dev) (Crepe) |
-| Índice y búsqueda | SQLite local |
-| Bases de datos | Frontmatter YAML + vistas propias |
-
-## Hoja de ruta
-
-1. [x] Preparar el proyecto (Tauri + React + TypeScript + Tailwind).
-2. [x] Abrir una bóveda y mostrar el árbol de ficheros `.md`.
-3. [x] Editor visual de Markdown con autoguardado.
-4. [x] Enlaces `[[nota]]` y backlinks.
-5. [x] Gestionar notas: crear, renombrar (actualizando enlaces), borrar y detectar cambios externos.
-6. [x] Índice SQLite y búsqueda rápida.
-7. [x] Bases de datos: frontmatter + vista de tabla.
-8. [x] Vistas kanban y calendario, plantillas.
-9. [x] Sincronización opcional con Git.
-
-### Pendiente
-
-Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión siguiente.
-
-**Versión y pruebas**
-
-- [ ] Publicar la v0.2.0.
-- [ ] Probar en la app real el vídeo, el audio y YouTube.
-- [ ] Probar en la app real las notificaciones de los recordatorios y el visor de PDF.
-
-**Bases de datos**
-
-- [x] Vistas de galería, lista y cronograma.
-- [x] Varias vistas guardadas por base de datos, cada una con sus filtros.
-- [x] Filtros por propiedad («estado es Hecho») y agrupar en la tabla.
-- [x] Fórmulas, relaciones entre bases de datos y rollups.
-- [x] Más tipos de propiedad: URL, email, teléfono, archivos, fecha de creación y de edición.
-- [x] Abrir una fila en un panel lateral sin salir de la tabla.
-- [x] Columnas: cambiar ancho, reordenar y ocultar.
-- [x] Totales al pie (contar, sumar, media).
-
-**Editor y navegación**
-
-- [x] Menciones con `@` (nota o fecha).
-- [x] Pestañas o dos notas lado a lado.
-- [x] Grafo de enlaces entre notas.
-- [x] Historial de una nota con Git: ver y restaurar versiones.
-- [x] Notas favoritas y recientes en la barra lateral.
-- [x] Arrastrar bloques para reordenarlos y «Convertir en…».
-
-**Ideas (lo que más se pide a Notion y aún no tiene)**
-
-- [x] Modo sin distracciones: ancho completo, tipografía (serif/mono) y texto pequeño por nota.
-- [x] Índice lateral de la nota (esquema de títulos siempre visible) y contador de palabras.
-- [x] Notas diarias con un clic (`Diario/2026-10-19.md`) y plantilla propia.
-- [x] Tareas con fecha de vencimiento y recordatorios (notificaciones del sistema).
-- [x] Tareas recurrentes (cada semana, cada mes…) en las bases de datos.
-- [x] Fechas en lenguaje natural («el viernes», «dentro de 3 días»).
-- [x] Colores de texto y de fondo, y columnas dentro de una nota.
-- [x] Notas al pie y comentarios en el margen.
-- [x] Gráficos a partir de una base de datos (barras, líneas, tarta).
-- [x] Formato condicional en tablas (colorear filas según un valor).
-- [x] Plantillas por base de datos y botones que crean filas.
-- [x] Bloques sincronizados (el mismo bloque en varias notas).
-- [x] Ver PDFs dentro de la nota y subrayarlos.
-- [x] Recortador web: guardar una página como nota.
-- [x] Notas cifradas con contraseña.
-- [x] Atajos de Vim opcionales.
-- [x] Sincronización sin Git (carpeta en la nube, WebDAV, Syncthing) con avisos de conflicto.
+- [ ] Probar en un Mac de verdad: vídeo, audio, YouTube, recordatorios, PDF, recortes, notas cifradas, WebDAV e importar desde Notion.
 - [ ] App para el móvil que abra la misma bóveda.
-
-**Extras**
-
-- [x] Importar desde Notion (export en Markdown/CSV).
-- [ ] Firmar los instaladores (necesita certificados de pago; ver más abajo).
-- [x] Actualización automática de la app (falta crear la clave de firma, ver «Actualizaciones automáticas»).
+- [ ] Firmar los instaladores (necesita certificados de pago; ver «Firmar los instaladores»).
 
 ## Desarrollo local
 
@@ -350,7 +267,10 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 
 1. Instalar dependencias: `pnpm install`
 2. Abrir la app en modo desarrollo: `pnpm tauri dev`
-3. Generar el instalador: `pnpm tauri build`
+3. Pruebas: `pnpm test` (interfaz) y `cargo test` en `src-tauri` (Rust).
+4. Generar el instalador: `pnpm tauri build`
+
+Hecha con [Tauri](https://tauri.app) (Rust), React, TypeScript, Tailwind CSS y [Milkdown](https://milkdown.dev). La búsqueda usa un índice SQLite en la caché del sistema (se puede borrar; se rehace solo).
 
 ### Publicar una versión
 
@@ -359,27 +279,11 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
 4. Revisa el borrador y pulsa **Publish release**.
 
-### macOS: «Botion está dañado y no se puede abrir»
+### Actualizaciones automáticas
 
-Pasa con las apps descargadas que no tienen certificado de Apple. No está dañada: macOS la bloquea por venir de internet.
+Al abrirse, Botion mira si hay una versión nueva en GitHub y ofrece «Actualizar y reiniciar» (también «Buscar actualizaciones» en la paleta). Las actualizaciones van firmadas: la clave pública está en `tauri.conf.json` y la privada tiene que estar en el secreto `TAURI_SIGNING_PRIVATE_KEY` del repositorio (**Settings → Secrets and variables → Actions**). Con él, el flujo «Versión» firma los instaladores y sube `latest.json`.
 
-1. Mueve `Botion.app` a **Aplicaciones**.
-2. Abre **Terminal** y ejecuta: `xattr -cr /Applications/Botion.app`
-3. Ábrela normalmente.
-
-La app va firmada «ad hoc» (sin certificado): si aun así avisa, clic derecho en Botion → **Abrir** → **Abrir**.
-
-### Actualizaciones automáticas (opcional)
-
-Al abrirse, Botion mira si hay una versión nueva publicada en GitHub y ofrece «Actualizar y reiniciar» (también «Buscar actualizaciones» en la paleta). Las actualizaciones van firmadas; para activarlas hace falta una clave, una sola vez:
-
-1. En tu ordenador: `pnpm tauri signer generate -w ~/.tauri/botion.key` (pide una contraseña; guarda bien el fichero).
-2. En GitHub → Settings → Secrets and variables → Actions:
-   - **Secrets:** `TAURI_SIGNING_PRIVATE_KEY` (el contenido de `~/.tauri/botion.key`) y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-   - **Variables:** `BOTION_UPDATER_PUBKEY` (el contenido de `~/.tauri/botion.key.pub`).
-3. Publica una versión: el flujo «Versión» firma los instaladores y sube `latest.json`. Las versiones compiladas así se actualizan solas a las siguientes.
-
-Sin la clave todo sigue funcionando; solo que la app no se actualiza sola.
+Si se pierde la clave privada, las versiones ya instaladas no podrán actualizarse solas: guárdala en un sitio seguro.
 
 ### Firmar los instaladores (opcional)
 
@@ -393,10 +297,6 @@ Sin firma, Windows (SmartScreen) y macOS (Gatekeeper) avisan la primera vez que 
    - Configura `bundle.windows.certificateThumbprint` en `tauri.conf.json` o una firma en la nube; ver la [guía de Tauri](https://tauri.app/distribute/sign/windows/).
 
 Guía completa: [firmar con Tauri](https://tauri.app/distribute/sign/).
-
-### Índice de búsqueda
-
-Botion guarda un índice SQLite de cada bóveda en la carpeta de caché del sistema (no dentro de tus notas). Se puede borrar sin perder nada: se reconstruye solo al abrir la bóveda.
 
 ### Estructura
 
