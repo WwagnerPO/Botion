@@ -210,6 +210,18 @@ Las plantillas son notas normales de la carpeta `Plantillas`. Úsalas con `/Plan
 
 Variables que se sustituyen al usarlas: `{{titulo}}`, `{{fecha}}` y `{{hora}}`.
 
+### Sincronizar sin Git
+
+- **Carpeta en la nube o Syncthing:** pon la bóveda dentro de Dropbox, iCloud Drive, OneDrive, Google Drive o una carpeta de Syncthing. Si una nota cambia en dos sitios a la vez, esos programas dejan una copia («conflicted copy», `.sync-conflict-…`): Botion la detecta, avisa al pie de la barra lateral y en «Conflictos» deja compararlas una al lado de otra y elegir (la mía, la copia o las dos).
+- **WebDAV** (Nextcloud, ownCloud, Synology, Fastmail…): paleta de comandos → «Sincronizar con WebDAV». Pon la dirección de una carpeta del servidor, tu usuario y una contraseña de aplicación. Sube lo que cambió aquí, baja lo que cambió allí y, si cambió en los dos sitios, guarda la del servidor como «nota (conflicto WebDAV)» para elegir después. Puede hacerse sola cada 5 minutos.
+  - Los ajustes se guardan en la carpeta de configuración de Botion de este ordenador, no en la bóveda (la contraseña, sin cifrar: usa una contraseña de aplicación que puedas revocar).
+
+### Importar desde Notion
+
+1. En Notion: «Settings» → «Export all workspace content» (o «Export» en una página) con formato **Markdown & CSV** e «Include subpages».
+2. En Botion: paleta de comandos → «Importar desde Notion (.zip)» (o «Importar carpeta exportada» si ya la descomprimiste).
+3. Todo queda en «Importado de Notion»: los nombres sin los códigos de Notion, los enlaces como `[[nota]]`, las imágenes y adjuntos con sus rutas, y cada tabla como base de datos con sus columnas en las propiedades (fechas, casillas, números y relaciones incluidas).
+
 ### Sincronización con Git
 
 Opcional. Al pie de la barra lateral:
@@ -313,14 +325,14 @@ Lo que falta respecto a Notion. Se marca al terminarlo y se quita en la versión
 - [x] Recortador web: guardar una página como nota.
 - [x] Notas cifradas con contraseña.
 - [x] Atajos de Vim opcionales.
-- [ ] Sincronización sin Git (carpeta en la nube, WebDAV, Syncthing) con avisos de conflicto.
+- [x] Sincronización sin Git (carpeta en la nube, WebDAV, Syncthing) con avisos de conflicto.
 - [ ] App para el móvil que abra la misma bóveda.
 
 **Extras**
 
-- [ ] Importar desde Notion (export en Markdown/CSV).
+- [x] Importar desde Notion (export en Markdown/CSV).
 - [ ] Firmar los instaladores (necesita certificados de pago; ver más abajo).
-- [ ] Actualización automática de la app.
+- [x] Actualización automática de la app (falta crear la clave de firma, ver «Actualizaciones automáticas»).
 
 ## Desarrollo local
 
@@ -356,6 +368,18 @@ Pasa con las apps descargadas que no tienen certificado de Apple. No está daña
 3. Ábrela normalmente.
 
 La app va firmada «ad hoc» (sin certificado): si aun así avisa, clic derecho en Botion → **Abrir** → **Abrir**.
+
+### Actualizaciones automáticas (opcional)
+
+Al abrirse, Botion mira si hay una versión nueva publicada en GitHub y ofrece «Actualizar y reiniciar» (también «Buscar actualizaciones» en la paleta). Las actualizaciones van firmadas; para activarlas hace falta una clave, una sola vez:
+
+1. En tu ordenador: `pnpm tauri signer generate -w ~/.tauri/botion.key` (pide una contraseña; guarda bien el fichero).
+2. En GitHub → Settings → Secrets and variables → Actions:
+   - **Secrets:** `TAURI_SIGNING_PRIVATE_KEY` (el contenido de `~/.tauri/botion.key`) y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+   - **Variables:** `BOTION_UPDATER_PUBKEY` (el contenido de `~/.tauri/botion.key.pub`).
+3. Publica una versión: el flujo «Versión» firma los instaladores y sube `latest.json`. Las versiones compiladas así se actualizan solas a las siguientes.
+
+Sin la clave todo sigue funcionando; solo que la app no se actualiza sola.
 
 ### Firmar los instaladores (opcional)
 

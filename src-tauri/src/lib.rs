@@ -5,10 +5,21 @@ mod files;
 mod git;
 mod index;
 mod links;
+mod notion;
 mod props;
 mod tasks;
 mod vault;
 mod web;
+mod webdav;
+
+/// Clave pública para comprobar las actualizaciones (variable de la compilación).
+const UPDATER_PUBKEY: Option<&str> = option_env!("BOTION_UPDATER_PUBKEY");
+
+/// Si esta versión puede actualizarse sola.
+#[tauri::command]
+fn updater_enabled() -> bool {
+    UPDATER_PUBKEY.is_some_and(|k| !k.trim().is_empty())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,8 +27,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // Actualizaciones: la clave pública llega al compilar (ver README).
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(UPDATER_PUBKEY.unwrap_or(""))
+                .build(),
+        )
+        .plugin(tauri_plugin_process::init())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
+            updater_enabled,
             vault::open_vault,
             vault::read_note,
             vault::write_note,
@@ -49,6 +68,10 @@ pub fn run() {
             index::get_graph,
             tasks::list_tasks,
             web::fetch_page,
+            notion::import_notion,
+            webdav::webdav_settings,
+            webdav::webdav_save,
+            webdav::webdav_sync,
             attachments::save_attachment,
             attachments::open_in_system,
             attachments::read_attachment,

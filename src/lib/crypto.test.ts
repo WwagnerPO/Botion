@@ -22,3 +22,28 @@ describe("recortes", () => {
     expect(noteName("...oculto")).toBe("oculto");
   });
 });
+
+import { findConflicts, keepBothName } from "./syncConflicts";
+
+describe("conflictos de sincronización", () => {
+  it("reconoce las copias", () => {
+    expect(
+      findConflicts([
+        "Ideas.md",
+        "Ideas.sync-conflict-20261104-101500-ABCD123.md",
+        "A/Plan (conflicted copy 2026-11-04).md",
+        "A/Plan (copia en conflicto de Ana).md",
+        "Diario (conflicto WebDAV 2).md",
+        "Lista (remoto).md",
+        "Receta (1).md",
+      ]),
+    ).toEqual([
+      { copy: "Ideas.sync-conflict-20261104-101500-ABCD123.md", original: "Ideas.md", source: "Syncthing" },
+      { copy: "A/Plan (conflicted copy 2026-11-04).md", original: "A/Plan.md", source: "la nube" },
+      { copy: "A/Plan (copia en conflicto de Ana).md", original: "A/Plan.md", source: "la nube" },
+      { copy: "Diario (conflicto WebDAV 2).md", original: "Diario.md", source: "WebDAV" },
+      { copy: "Lista (remoto).md", original: "Lista.md", source: "Git" },
+    ]);
+    expect(keepBothName("A/Plan.md")).toBe("Plan (otra versión)");
+  });
+});

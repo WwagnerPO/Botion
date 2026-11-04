@@ -31,6 +31,11 @@ percent-encoding = "2.3.2"
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 ureq = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+csv = "1"
+quick-xml = "0.37"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
