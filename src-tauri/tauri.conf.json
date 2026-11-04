@@ -41,5 +41,13 @@
     "macOS": {
       "signingIdentity": "-"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/WwagnerPO/Botion/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

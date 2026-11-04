@@ -2,6 +2,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { decryptBody, decryptWithKey, encryptBody, isEncrypted, newKey, type NoteKey } from "./lib/crypto";
 import { CLIPS_FOLDER, clipPage } from "./lib/clip";
 import { LockedNote } from "./components/LockedNote";
+import { ConflictsPanel } from "./components/ConflictsPanel";
+import { WebDavPanel } from "./components/WebDavPanel";
+import { findConflicts, keepBothName, type SyncConflict } from "./lib/syncConflicts";
+import type { WebDavReport } from "./lib/webdav";
+import { checkForUpdate, importNotion, installUpdate, updaterEnabled, type Update } from "./lib/updater";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import {
   AlarmClock,
@@ -188,6 +194,8 @@ export default function App() {
     walk(vault?.tree ?? []);
     return paths;
   }, [vault?.tree]);
+  /** Copias en conflicto que han dejado Syncthing, Dropbox, WebDAV… */
+  const syncConflicts = useMemo(() => findConflicts(notePaths), [notePaths]);
   // Qué enlaces [[...]] apuntan a notas que existen, según el árbol.
   const linkExists = useMemo(() => linkChecker(notePaths), [notePaths]);
   /** Títulos y palabras de la nota abierta. */
@@ -197,6 +205,10 @@ export default function App() {
   const [outlineOn, setOutlineOn] = useStoredFlag("indice-lateral");
   const [focus, setFocus] = useStoredFlag("sin-distracciones");
   const [vim, setVim] = useStoredFlag("vim");
+  const [conflictsOpen, setConflictsOpen] = useState(false);
+  const openWebDav = useRef<(() => void) | null>(null);
+  /** Versión nueva de la app lista para instalar. */
+  const [update, setUpdate] = useState<{ update: Update; progress: number | null; installing: boolean } | null>(null);
   const noteScroll = useRef<HTMLDivElement>(null);
   /** Tareas con fecha de la bóveda (para el panel y los recordatorios). */
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -806,6 +818,66 @@ export default function App() {
     });
   }
 
+  // --- Sincronización sin Git: conflictos, WebDAV, importar y actualizar ---
+
+  async function resolveConflict(c: SyncConflict, choice: "mine" | "theirs" | "both") {
+    await run(async () => {
+      await flushEdits();
+      if (choice === "theirs" && notePaths.includes(c.original)) {
+        await writeNote(c.original, await readNote(c.copy));
+      } else if (choice === "theirs") {
+        await afterRelocate(c.copy, await renameEntry(c.copy, c.original.split("/").pop()!.replace(/\.md$/i, "")));
+        return;
+      }
+      if (choice === "both") {
+        await afterRelocate(c.copy, await renameEntry(c.copy, keepBothName(c.original)));
+        return;
+      }
+      await deleteEntry(c.copy);
+      forgetPaths(c.copy);
+      if (split === c.copy) setSplit(null);
+      await reloadTree();
+      if (noteRef.current?.path === c.original) await openNote(c.original, true);
+    });
+  }
+
+  function handleWebDav(report: WebDavReport, message: string) {
+    if (report.conflicts.length) setConflictsOpen(true);
+    return handleSynced({ committed: false, pulled: report.downloaded + report.deleted > 0, pushed: report.uploaded > 0, changed: report.changed, conflicts: [] }, message);
+  }
+
+  async function importFromNotion(folder: boolean) {
+    const source = await openDialog(folder ? { directory: true } : { filters: [{ name: "Exportación de Notion", extensions: ["zip"] }] });
+    if (typeof source !== "string") return;
+    await run(async () => {
+      setNotice("Importando desde Notion…");
+      const r = await importNotion(source);
+      await reloadTree();
+      setNotice(`Importadas ${r.notes} notas, ${r.databases} bases de datos y ${r.files} archivos en «${r.folder}».`);
+    });
+  }
+
+  async function lookForUpdate(manual: boolean) {
+    try {
+      if (!(await updaterEnabled())) {
+        if (manual) setNotice("Esta versión no se actualiza sola: descarga la nueva desde GitHub (Releases).");
+        return;
+      }
+      const found = await checkForUpdate();
+      if (found) setUpdate({ update: found, progress: null, installing: false });
+      else if (manual) setNotice("Ya tienes la última versión.");
+    } catch (e) {
+      if (manual) setError(`No se pudo buscar la actualización: ${e}`);
+    }
+  }
+
+  // Al abrir, se mira si hay una versión nueva (sin molestar si no la hay).
+  useEffect(() => {
+    const t = setTimeout(() => lookForUpdate(false), 8000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // --- Recortador web ---
 
   /** Pide una dirección, guarda la página en «Recortes/» y la abre (o la enlaza). */
@@ -1209,6 +1281,11 @@ export default function App() {
     { id: "wide", name: "Ancho completo", needsNote: true, run: () => pageAction("wide") },
     { id: "vim", name: vim ? "Desactivar atajos de Vim" : "Activar atajos de Vim", run: () => pageAction("vim") },
     { id: "clip", name: "Recortar página web", run: () => clipWeb() },
+    { id: "notion-zip", name: "Importar desde Notion (.zip)", run: () => importFromNotion(false) },
+    { id: "notion-folder", name: "Importar carpeta exportada de Notion", run: () => importFromNotion(true) },
+    { id: "webdav", name: "Sincronizar con WebDAV (ajustes)", run: () => openWebDav.current?.() },
+    { id: "conflicts", name: "Conflictos de sincronización", run: () => setConflictsOpen(true) },
+    { id: "update", name: "Buscar actualizaciones de Botion", run: () => lookForUpdate(true) },
     ...(note?.encrypted
       ? [
           { id: "lock", name: "Bloquear nota cifrada", needsNote: true, run: () => lockNote() },
@@ -1452,12 +1529,24 @@ export default function App() {
         onMove={moveTo}
         footer={
           vault && (
-            <GitPanel
-              root={vault.root}
-              beforeSync={beforeSync}
-              onSynced={handleSynced}
-              onError={showError}
-            />
+            <>
+              {syncConflicts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setConflictsOpen(true)}
+                  className="mb-1.5 flex w-full items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-left text-xs text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200"
+                >
+                  ⚠️ {syncConflicts.length} {syncConflicts.length === 1 ? "conflicto" : "conflictos"} de sincronización
+                </button>
+              )}
+              <WebDavPanel root={vault.root} beforeSync={beforeSync} onSynced={handleWebDav} onError={showError} openRef={openWebDav} />
+              <GitPanel
+                root={vault.root}
+                beforeSync={beforeSync}
+                onSynced={handleSynced}
+                onError={showError}
+              />
+            </>
           )
         }
       />
@@ -1753,6 +1842,49 @@ export default function App() {
           onToggleOutline={() => pageAction("outline")}
           onToggleFocus={() => pageAction("focus")}
         />
+      )}
+      {conflictsOpen && (
+        <ConflictsPanel
+          conflicts={syncConflicts}
+          exists={(p) => notePaths.includes(p)}
+          onCompare={(c) => {
+            openNote(c.original);
+            setSplit(c.copy);
+          }}
+          onResolve={resolveConflict}
+          onClose={() => setConflictsOpen(false)}
+        />
+      )}
+      {update && (
+        <div role="status" className="fixed bottom-4 left-4 z-40 flex max-w-sm animate-pop items-center gap-3 rounded-lg bg-white px-3 py-2.5 text-sm shadow-pop dark:bg-neutral-800">
+          <span className="flex-1">
+            Hay una versión nueva de Botion: <b>{update.update.version}</b>
+            {update.installing && <span className="block text-xs text-neutral-400">Descargando{update.progress !== null ? ` ${update.progress} %` : "…"}</span>}
+          </span>
+          {!update.installing && (
+            <>
+              <button type="button" onClick={() => setUpdate(null)} className="text-xs text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200">
+                Luego
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setUpdate((u) => u && { ...u, installing: true });
+                  try {
+                    await flushEdits();
+                    await installUpdate(update.update, (progress) => setUpdate((u) => u && { ...u, progress }));
+                  } catch (e) {
+                    setError(`No se pudo actualizar: ${e}`);
+                    setUpdate(null);
+                  }
+                }}
+                className="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700"
+              >
+                Actualizar y reiniciar
+              </button>
+            </>
+          )}
+        </div>
       )}
       {tasksOpen && (
         <TasksPanel
