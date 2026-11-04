@@ -4,6 +4,19 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 
 > Estado: **primera versión completa** (todas las fases de la hoja de ruta).
 
+![Una nota con portada, icono, avisos y tareas con fecha](docs/capturas/nota.png)
+
+## Capturas
+
+| | |
+|---|---|
+| ![Base de datos en tabla con colores por prioridad y total de horas](docs/capturas/tabla.png) | ![Vista kanban agrupada por estado](docs/capturas/kanban.png) |
+| **Tabla** con formato condicional y totales | **Kanban**: arrastra para cambiar el estado |
+| ![Gráfico de barras con las horas por responsable](docs/capturas/grafico.png) | ![Panel de tareas con vencidas, hoy y próximas](docs/capturas/tareas.png) |
+| **Gráfico** a partir de la base de datos | **Tareas** con fecha de toda la bóveda |
+| ![Tema oscuro con el índice lateral](docs/capturas/oscuro.png) | ![Grafo de enlaces entre notas](docs/capturas/grafo.png) |
+| **Tema oscuro** e índice lateral | **Grafo** de enlaces |
+
 ## Principios
 
 - **Local primero:** funciona sin internet, sin servidor y sin cuenta.
