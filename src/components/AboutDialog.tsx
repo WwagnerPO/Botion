@@ -64,7 +64,7 @@ export function AboutDialog({ onClose, onCheckUpdate }: Props) {
 
   const links = [
     { label: "Página del proyecto", Icon: Globe, url: REPO_URL },
-    { label: "Ayuda (guía de uso)", Icon: HelpCircle, url: `${REPO_URL}#índice` },
+    { label: "Ayuda (guía de uso)", Icon: HelpCircle, url: `${REPO_URL}/blob/main/GUIA.md` },
     { label: "Novedades de cada versión", Icon: BookOpen, url: `${REPO_URL}/releases` },
     { label: "Avisar de un fallo o pedir una idea", Icon: Bug, url: `${REPO_URL}/issues` },
   ];

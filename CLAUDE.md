@@ -9,7 +9,7 @@
 
 - Cada función nueva que se pueda insertar o usar desde una nota debe tener
   su comando en el menú «/» del editor (grupo «Botion», en
-  `src/lib/slashCommands.ts`), y aparecer en la sección «Comandos /» del README.
+  `src/lib/slashCommands.ts`), y aparecer en la sección «Comandos /» de `GUIA.md`.
 
 ## Respuestas
 

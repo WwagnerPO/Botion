@@ -34,7 +34,6 @@ Varias personas sobre la misma bóveda. Por orden de esfuerzo:
 1. **Bóveda compartida** (bajo). Ya funciona con Git o WebDAV y el panel de conflictos. Falta:
    - [ ] Nombre de usuario en ajustes.
    - [ ] Autor en comentarios e historial.
-   - [ ] Sincronizar solo cada pocos minutos también con Git.
 2. **Edición en tiempo real** (medio). Yjs + `@milkdown/plugin-collab`, cursores de los demás. Necesita un servidor pequeño de retransmisión (propio en un VPS, o integrado en Botion para la red local). El `.md` sigue siendo la fuente.
 3. **Equipo con permisos** (alto). Servidor central con cuentas y permisos por carpeta. Cambia la idea de la app (deja de ser solo local) y complica las notas cifradas.
 
