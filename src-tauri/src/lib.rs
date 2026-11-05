@@ -13,6 +13,17 @@ mod web;
 mod webdav;
 
 /// Si esta versión puede actualizarse sola (tiene la clave pública en tauri.conf.json).
+/// Sistema y arquitectura, para el informe de «Acerca de».
+#[tauri::command]
+fn system_info() -> String {
+    format!(
+        "{} {} ({})",
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        std::env::consts::FAMILY
+    )
+}
+
 #[tauri::command]
 fn updater_enabled(app: tauri::AppHandle) -> bool {
     app.config()
@@ -36,6 +47,7 @@ pub fn run() {
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             updater_enabled,
+            system_info,
             vault::open_vault,
             vault::read_note,
             vault::write_note,

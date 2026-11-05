@@ -6,6 +6,8 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - **Tus datos son tuyos:** notas Markdown normales, compatibles con Obsidian.
 - **Descargar:** última versión en [Releases](https://github.com/WwagnerPO/Botion/releases/latest).
 
+[![Invítame a un café](https://img.shields.io/badge/Inv%C3%ADtame%20a%20un%20caf%C3%A9-%E2%98%95-FFDD00?style=flat&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/wwagnerpo)
+
 ![Una nota con portada, icono, avisos y tareas con fecha](docs/capturas/nota.png)
 
 ## Índice
@@ -29,6 +31,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
   - [Sincronización con Git](#sincronización-con-git)
 - [Pendiente](#pendiente)
 - [Desarrollo](#desarrollo)
+- [Apoyar el proyecto](#apoyar-el-proyecto)
 - [Licencia](#licencia)
   - [Contribuciones](#contribuciones)
 
@@ -51,7 +54,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - PDF con subrayados, bloques sincronizados, comentarios, colores, columnas y notas al pie.
 - Notas cifradas, recortador web, atajos de Vim, importar desde Notion.
 - Sincronización con Git, WebDAV o una carpeta en la nube, con historial y conflictos resueltos en la app.
-- Se actualiza sola.
+- Se actualiza sola. Versión y enlaces en «Acerca de» (icono ⓘ al pie de la barra lateral).
 
 ## Uso
 
@@ -278,6 +281,10 @@ Lo que no choca se une solo.
 ## Desarrollo
 
 Compilar, probar, publicar versiones, actualizaciones automáticas y firma de instaladores: ver [DESARROLLO.md](DESARROLLO.md).
+
+## Apoyar el proyecto
+
+Botion es gratis y lo hago en mi tiempo libre. Si te resulta útil, puedes [invitarme a un café ☕](https://buymeacoffee.com/wwagnerpo). También ayuda dar una ⭐ al repositorio o [avisar de fallos e ideas](https://github.com/WwagnerPO/Botion/issues).
 
 ## Licencia
 
