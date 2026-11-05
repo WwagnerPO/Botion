@@ -31,6 +31,7 @@ import { Backlinks } from "./components/Backlinks";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { DatabaseView } from "./components/DatabaseView";
 import { Dialog, type DialogRequest } from "./components/Dialog";
+import { AboutDialog } from "./components/AboutDialog";
 import { Editor } from "./components/Editor";
 import { GitPanel } from "./components/GitPanel";
 import { GraphView } from "./components/GraphView";
@@ -178,6 +179,7 @@ export default function App() {
     items: MenuItem[];
   } | null>(null);
   const [dialog, setDialog] = useState<DialogRequest | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
@@ -1286,6 +1288,7 @@ export default function App() {
     { id: "webdav", name: "Sincronizar con WebDAV (ajustes)", run: () => openWebDav.current?.() },
     { id: "conflicts", name: "Conflictos de sincronización", run: () => setConflictsOpen(true) },
     { id: "update", name: "Buscar actualizaciones de Botion", run: () => lookForUpdate(true) },
+    { id: "about", name: "Acerca de Botion", run: () => setAboutOpen(true) },
     ...(note?.encrypted
       ? [
           { id: "lock", name: "Bloquear nota cifrada", needsNote: true, run: () => lockNote() },
@@ -1518,6 +1521,7 @@ export default function App() {
         onNewFolder={() => newFolder()}
         onSearch={() => setSearching(true)}
         onCommands={() => setCommandsOpen(true)}
+        onAbout={() => setAboutOpen(true)}
         onGraph={() => setGraphOpen(true)}
         onDaily={(e) => openDailyNote(e)}
         onTasks={() => {
@@ -1966,6 +1970,7 @@ export default function App() {
       )}
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
       {dialog && <Dialog request={dialog} onClose={closeDialog} />}
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} onCheckUpdate={() => lookForUpdate(true)} />}
       {commandsOpen && (
         <SearchPalette
           placeholder="Escribe un comando…"

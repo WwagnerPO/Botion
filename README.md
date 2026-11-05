@@ -51,7 +51,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 - PDF con subrayados, bloques sincronizados, comentarios, colores, columnas y notas al pie.
 - Notas cifradas, recortador web, atajos de Vim, importar desde Notion.
 - Sincronización con Git, WebDAV o una carpeta en la nube, con historial y conflictos resueltos en la app.
-- Se actualiza sola.
+- Se actualiza sola. Versión y enlaces en «Acerca de» (icono ⓘ al pie de la barra lateral).
 
 ## Uso
 

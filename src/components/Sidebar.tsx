@@ -11,6 +11,7 @@ import {
   FilePlus2,
   FolderPlus,
   FolderOpen,
+  Info,
   Search,
   SquarePen,
 } from "lucide-react";
@@ -34,6 +35,7 @@ interface Props {
   onNewFolder: () => void;
   onSearch: () => void;
   onCommands: () => void;
+  onAbout: () => void;
   onGraph: () => void;
   /** Abre (o crea) la nota de hoy. */
   onDaily: (e: React.MouseEvent) => void;
@@ -64,6 +66,7 @@ export function Sidebar({
   onNewFolder,
   onSearch,
   onCommands,
+  onAbout,
   onGraph,
   onDaily,
   onTasks,
@@ -223,7 +226,20 @@ export function Sidebar({
       </nav>
       <footer className="space-y-2 border-t border-neutral-200/80 p-2 dark:border-neutral-800">
         {footer}
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <ThemeToggle />
+          </div>
+          <button
+            type="button"
+            onClick={onAbout}
+            title="Acerca de Botion"
+            aria-label="Acerca de Botion"
+            className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-200/60 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+          >
+            <Info className="size-4" />
+          </button>
+        </div>
       </footer>
     </aside>
   );
