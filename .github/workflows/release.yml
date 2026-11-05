@@ -98,6 +98,17 @@ jobs:
           done
           echo "UPDATER_ARGS=--config src-tauri/tauri.updater.conf.json" >> "$GITHUB_ENV"
 
+      # Novedades de esta versión (CHANGELOG.md) para la página de la versión.
+      - name: Notas de la versión
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo "body<<FIN_DE_NOTAS"
+            node scripts/release-notes.mjs
+            echo "FIN_DE_NOTAS"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +116,11 @@ jobs:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: Botion ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseBody: |
-            Instaladores de Botion. Descarga el de tu sistema:
+            ${{ steps.notes.outputs.body }}
+
+            ## Descargar
+
+            Descarga el instalador de tu sistema:
 
             - Windows: `.msi` o `-setup.exe`
             - macOS: `.dmg` (aarch64 para Apple Silicon, x64 para Intel)

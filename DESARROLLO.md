@@ -33,9 +33,10 @@ Hecha con [Tauri](https://tauri.app) (Rust), React, TypeScript, Tailwind CSS y [
 ## Publicar una versión
 
 1. Sube el número de versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json`.
-2. Crea y sube una etiqueta (`git tag v0.2.0 && git push origin v0.2.0`) o lanza a mano el workflow «Versión» en **Actions**.
-3. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
-4. Revisa el borrador y pulsa **Publish release**.
+2. Añade la sección `## vX.Y.Z` en `CHANGELOG.md`: es el texto de la página de la versión (si falta, el workflow falla).
+3. Crea y sube una etiqueta (`git tag v0.2.0 && git push origin v0.2.0`) o lanza a mano el workflow «Versión» en **Actions**.
+4. GitHub Actions compila los instaladores de Windows, macOS y Linux y los deja en un borrador en **Releases**.
+5. Revisa el borrador y pulsa **Publish release**.
 
 ## Actualizaciones automáticas
 

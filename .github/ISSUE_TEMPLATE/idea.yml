@@ -1,0 +1,24 @@
+name: Proponer una idea
+description: Una función nueva o una mejora.
+title: "[Idea] "
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: La idea
+      description: Qué te gustaría que hiciera Botion.
+    validations:
+      required: true
+  - type: textarea
+    id: para
+    attributes:
+      label: Para qué la usarías
+      description: El problema que te resuelve o cómo la usarías en el día a día.
+    validations:
+      required: true
+  - type: textarea
+    id: ejemplo
+    attributes:
+      label: Ejemplos (opcional)
+      description: Cómo lo hacen otras apps (Notion, Obsidian…), capturas o bocetos.
