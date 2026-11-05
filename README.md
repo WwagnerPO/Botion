@@ -29,7 +29,6 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
   - [Sincronizar sin Git](#sincronizar-sin-git)
   - [Importar desde Notion](#importar-desde-notion)
   - [Sincronización con Git](#sincronización-con-git)
-- [Pendiente](#pendiente)
 - [Desarrollo](#desarrollo)
 - [Apoyar el proyecto](#apoyar-el-proyecto)
 - [Licencia](#licencia)
@@ -272,15 +271,11 @@ Si dos ordenadores cambian la misma parte de una nota, Botion pregunta qué hace
 
 Lo que no choca se une solo.
 
-## Pendiente
-
-- [ ] Probar en un Mac de verdad: vídeo, audio, YouTube, recordatorios, PDF, recortes, notas cifradas, WebDAV e importar desde Notion.
-- [ ] App para el móvil que abra la misma bóveda.
-- [ ] Firmar los instaladores (necesita certificados de pago; ver [DESARROLLO.md](DESARROLLO.md#firmar-los-instaladores-opcional)).
-
 ## Desarrollo
 
 Compilar, probar, publicar versiones, actualizaciones automáticas y firma de instaladores: ver [DESARROLLO.md](DESARROLLO.md).
+
+Tareas e ideas para próximas versiones: ver [PENDIENTE.md](PENDIENTE.md).
 
 ## Apoyar el proyecto
 

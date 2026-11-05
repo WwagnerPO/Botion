@@ -1,6 +1,6 @@
 # Desarrollo de Botion
 
-Cómo compilar, probar y publicar la app. Para usarla, ver el [README](README.md).
+Cómo compilar, probar y publicar la app. Para usarla, ver el [README](README.md). Tareas e ideas: [PENDIENTE.md](PENDIENTE.md).
 
 ## Índice
 
