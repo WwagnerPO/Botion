@@ -59,7 +59,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Firma de macOS (ver README). Un secreto que no existe llega vacío y
+      # Firma de macOS (ver DESARROLLO.md). Un secreto que no existe llega vacío y
       # Tauri intentaría firmar igual, así que solo se pasan si hay certificado.
       - name: Firma de macOS
         if: matrix.os == 'macos-latest'
@@ -82,7 +82,7 @@ jobs:
             fi
           done
 
-      # Actualizaciones automáticas (ver README): solo si hay clave de firma.
+      # Actualizaciones automáticas (ver DESARROLLO.md): solo si hay clave de firma.
       - name: Actualizaciones automáticas
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
