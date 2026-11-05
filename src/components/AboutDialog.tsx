@@ -1,12 +1,13 @@
 import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { BookOpen, Bug, Check, ClipboardCopy, Globe, HelpCircle, RefreshCw, Scale } from "lucide-react";
+import { BookOpen, Bug, Check, ClipboardCopy, Coffee, Globe, HelpCircle, RefreshCw, Scale } from "lucide-react";
 import { useEffect, useState } from "react";
 import logo from "../assets/logo.png";
 
 export const REPO_URL = "https://github.com/WwagnerPO/Botion";
 const AUTHOR = { name: "WwagnerPO", url: "https://github.com/WwagnerPO" };
+export const DONATE_URL = "https://buymeacoffee.com/wwagnerpo";
 
 /** Librerías principales con las que está hecho Botion. */
 const CREDITS = [
@@ -120,6 +121,15 @@ export function AboutDialog({ onClose, onCheckUpdate }: Props) {
             Buscar actualizaciones
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => open(DONATE_URL)}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#FFDD00] px-4 py-1.5 text-sm font-medium text-neutral-900 shadow-sm hover:brightness-95"
+        >
+          <Coffee className="size-4" />
+          Invítame a un café
+        </button>
 
         <div className="mt-4 text-xs text-neutral-500">
           <button type="button" onClick={() => setCredits((c) => !c)} aria-expanded={credits} className="hover:underline">
