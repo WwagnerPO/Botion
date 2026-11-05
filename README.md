@@ -4,7 +4,7 @@ App de escritorio local para tomar notas, inspirada en [Notion](https://www.noti
 
 - **Local:** sin cuenta, sin servidor y sin internet. Para Windows, macOS y Linux.
 - **Tus datos son tuyos:** notas Markdown normales, compatibles con Obsidian.
-- **Descargar:** última versión en [Releases](https://github.com/WwagnerPO/Botion/releases/latest).
+- **Descargar:** última versión en [Releases](https://github.com/WwagnerPO/Botion/releases/latest). Novedades en [CHANGELOG.md](CHANGELOG.md).
 
 [![Invítame a un café](https://img.shields.io/badge/Inv%C3%ADtame%20a%20un%20caf%C3%A9-%E2%98%95-FFDD00?style=flat&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/wwagnerpo)
 
@@ -67,7 +67,7 @@ Tareas e ideas para próximas versiones: ver [PENDIENTE.md](PENDIENTE.md).
 
 ## Apoyar el proyecto
 
-Botion es gratis y lo hago en mi tiempo libre. Si te resulta útil, puedes [invitarme a un café ☕](https://buymeacoffee.com/wwagnerpo). También ayuda dar una ⭐ al repositorio o [avisar de fallos e ideas](https://github.com/WwagnerPO/Botion/issues).
+Botion es gratis y lo hago en mi tiempo libre. Si te resulta útil, puedes [invitarme a un café ☕](https://buymeacoffee.com/wwagnerpo). También ayuda dar una ⭐ al repositorio o [avisar de fallos e ideas](https://github.com/WwagnerPO/Botion/issues/new/choose).
 
 ## Licencia
 
