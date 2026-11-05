@@ -16,7 +16,12 @@ mod webdav;
 /// Sistema y arquitectura, para el informe de «Acerca de».
 #[tauri::command]
 fn system_info() -> String {
-    format!("{} {} ({})", std::env::consts::OS, std::env::consts::ARCH, std::env::consts::FAMILY)
+    format!(
+        "{} {} ({})",
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        std::env::consts::FAMILY
+    )
 }
 
 #[tauri::command]
