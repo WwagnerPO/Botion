@@ -2,6 +2,7 @@ import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
 import { clearTextInCurrentBlockCommand } from "@milkdown/kit/preset/commonmark";
 import { TextSelection } from "@milkdown/kit/prose/state";
+import { findWrapping } from "@milkdown/kit/prose/transform";
 import { insert } from "@milkdown/kit/utils";
 import {
   CALLOUT_TYPES,
@@ -159,24 +160,47 @@ function tocMarkdown(ctx: Ctx) {
 
 /**
  * Añade una marca de tarea (`📅 …`, `⏰ …`, `🔁 …`) al final de la línea.
- * Si la línea aún no es una tarea, se avisa: las fechas solo cuentan ahí.
+ * Si la línea aún no es una tarea, la convierte en una (`- [ ]`): las fechas solo cuentan ahí.
  */
 function appendToTask(ctx: Ctx, text: string, notify: (m: string) => void) {
   const view = ctx.get(editorViewCtx);
-  const { $from } = view.state.selection;
-  let isTask = false;
+  const { state } = view;
+  const { $from } = state.selection;
+  let item = -1;
   for (let d = $from.depth; d > 0; d--) {
-    const node = $from.node(d);
-    if (node.type.name === "list_item") {
-      isTask = typeof node.attrs.checked === "boolean";
+    if ($from.node(d).type.name === "list_item") {
+      item = d;
       break;
     }
   }
-  const end = $from.end();
   const before = $from.parent.textBetween(0, $from.parent.content.size);
-  view.dispatch(view.state.tr.insertText(`${before && !before.endsWith(" ") ? " " : ""}${text}`, end));
+  const tr = state.tr.insertText(`${before && !before.endsWith(" ") ? " " : ""}${text}`, $from.end());
+  let converted = false;
+  if (item > 0) {
+    const node = $from.node(item);
+    if (typeof node.attrs.checked !== "boolean") {
+      tr.setNodeMarkup($from.before(item), undefined, { ...node.attrs, checked: false });
+      converted = true;
+    }
+  } else if ($from.parent.type.name === "paragraph") {
+    const $pos = tr.doc.resolve(tr.mapping.map($from.pos));
+    const range = $pos.blockRange();
+    const list = state.schema.nodes.bullet_list;
+    const wrapping = range && list && findWrapping(range, list);
+    if (range && wrapping) {
+      tr.wrap(range, wrapping);
+      tr.doc.nodesBetween(range.start, range.start + 3, (node, pos) => {
+        if (node.type.name !== "list_item") return true;
+        tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked: false });
+        return false;
+      });
+      converted = true;
+    }
+  }
+  view.dispatch(tr);
   view.focus();
-  if (!isTask) notify("Las fechas y repeticiones cuentan en las tareas (- [ ]).");
+  if (!converted && item < 0) notify("Las fechas y repeticiones cuentan en las tareas (- [ ]).");
+  else if (converted) notify("Convertida en tarea: aparece en el panel de tareas.");
 }
 
 /** Inserta un comentario `%%…%%` vacío en el cursor y lo abre para escribir. */

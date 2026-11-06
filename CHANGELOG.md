@@ -2,6 +2,16 @@
 
 Cambios de cada versión de Botion. Descargas en [Releases](https://github.com/WwagnerPO/Botion/releases).
 
+## v0.2.1
+
+### Arreglos
+- Los enlaces de «Acerca de», de YouTube y de las propiedades URL vuelven a abrirse en el navegador.
+- `/Recordatorio`, `/Fecha de vencimiento` y `/Repetir tarea` en una línea normal la convierten en tarea, para que salga en el panel de tareas.
+- Git: si una carpeta de la bóveda tiene su propio repositorio dentro, Botion lo dice claramente en vez de dar un error de Git; y ya no salen avisos de CRLF en Windows.
+- Recortador web: se queda con el texto principal de la página (por ejemplo, en GitHub) y deja fuera menús, avisos y elementos ocultos.
+
+> Esta es la primera versión que llega sola: si tienes la v0.2.0, Botion te avisará para instalarla.
+
 ## v0.2.0
 
 ### Editor

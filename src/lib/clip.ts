@@ -5,7 +5,24 @@ import { today } from "./slashCommands";
 /** Carpeta donde se guardan las páginas recortadas. */
 export const CLIPS_FOLDER = "Recortes";
 
-const NOISE = "script, style, noscript, iframe, form, nav, header, footer, aside, svg, button, [role=navigation], [aria-hidden=true], .ad, .ads, .cookie, .newsletter";
+const NOISE = [
+  "script, style, noscript, iframe, form, nav, header, footer, aside, svg, button, select, input, template",
+  "dialog, details-menu, [hidden], [aria-hidden=true]",
+  "[role=navigation], [role=dialog], [role=menu], [role=tooltip], [role=alert]",
+  ".ad, .ads, .cookie, .newsletter, .sr-only, .visually-hidden",
+].join(", ");
+
+/** Contenedores habituales del texto principal, de más a menos concreto. */
+const CONTENT = [
+  "[itemprop=articleBody]",
+  ".markdown-body",
+  ".entry-content",
+  ".post-content",
+  ".article-body",
+  "article",
+  "main",
+  "[role=main]",
+];
 
 /** Nombre de nota válido a partir del título de la página. */
 export function noteName(title: string) {
@@ -19,8 +36,10 @@ export function noteName(title: string) {
 
 /** Parte principal de la página: el artículo, o el bloque con más párrafos. */
 function mainContent(doc: Document): Element {
-  const direct = doc.querySelector("article, main, [role=main]");
-  if (direct && direct.textContent!.trim().length > 200) return direct;
+  for (const selector of CONTENT) {
+    const direct = doc.querySelector(selector);
+    if (direct && direct.textContent!.trim().length > 200) return direct;
+  }
   let best: Element = doc.body;
   let score = 0;
   doc.querySelectorAll("div, section").forEach((el) => {
@@ -52,7 +71,12 @@ export function htmlToNote(html: string, url: string) {
     else img.remove();
   });
   const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-", hr: "---" });
-  let markdown = turndown.turndown(root.innerHTML).replace(/\n{3,}/g, "\n\n").trim();
+  let markdown = turndown
+    .turndown(root.innerHTML)
+    // Turndown deja «-   texto»: un solo espacio tras la viñeta, como se escribe a mano.
+    .replace(/^(\s*)(-|\d+\.) {2,}/gm, "$1$2 ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   // El título va como encabezado (si la página no lo repite ya).
   if (!markdown.startsWith("# ")) markdown = `# ${title}\n\n${markdown}`;
   return { title, description: meta("og:description") || meta("description"), markdown };

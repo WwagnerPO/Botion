@@ -58,6 +58,8 @@ fn git(root: &Path, args: &[&str]) -> Result<Output, String> {
     let mut cmd = Command::new("git");
     cmd.current_dir(root)
         .args(["-c", "core.quotepath=false"])
+        // Las notas se guardan tal cual (LF): sin conversiones ni avisos de CRLF en Windows.
+        .args(["-c", "core.autocrlf=false", "-c", "core.safecrlf=false"])
         .args(args)
         // Sin preguntas interactivas: la app no tiene terminal.
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -86,7 +88,14 @@ fn git_ok(root: &Path, args: &[&str]) -> Result<String, String> {
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
-        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        // Los avisos («warning:», «hint:») no son el error: se quitan del mensaje.
+        let err = String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .filter(|l| !l.starts_with("warning:") && !l.starts_with("hint:"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim()
+            .to_string();
         Err(if err.is_empty() {
             format!("git {} falló", args.join(" "))
         } else {
@@ -251,9 +260,48 @@ pub fn file_at(root: &Path, hash: &str, path: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Carpetas de la bóveda con su propio repositorio Git dentro (`carpeta/.git`).
+/// Git no puede guardarlas como parte de la bóveda.
+fn nested_repos(root: &Path) -> Vec<String> {
+    fn walk(root: &Path, dir: &Path, found: &mut Vec<String>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name();
+            if name == ".git" || name == "node_modules" || !path.is_dir() || path.is_symlink() {
+                continue;
+            }
+            if path.join(".git").exists() {
+                let rel = path.strip_prefix(root).unwrap_or(&path);
+                found.push(rel.to_string_lossy().replace('\\', "/"));
+            } else {
+                walk(root, &path, found);
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(root, root, &mut found);
+    found.sort();
+    found
+}
+
 /// Guarda en Git todos los cambios de la bóveda. Devuelve si hubo commit.
 pub fn commit_all(root: &Path, message: &str) -> Result<bool, String> {
     ensure_gitignore(root)?;
+    let nested = nested_repos(root);
+    if !nested.is_empty() {
+        let list = nested
+            .iter()
+            .map(|n| format!("«{n}»"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "No se puede guardar en Git: {list} tiene su propio repositorio Git dentro (una carpeta oculta .git). \
+             Borra esa carpeta .git o mueve la carpeta fuera de la bóveda."
+        ));
+    }
     git_ok(root, &["add", "-A", "--", "."])?;
     let staged = git(root, &["diff", "--cached", "--quiet"])?;
     if staged.status.success() {
@@ -584,6 +632,24 @@ mod tests {
         fs::write(root.join("Nota.md"), "adiós").unwrap();
         assert_eq!(status(root).changes, 1);
         assert!(commit_all(root, "x").unwrap());
+    }
+
+    #[test]
+    fn avisa_de_repositorios_dentro_de_la_boveda() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::write(root.join("Nota.md"), "hola").unwrap();
+        fs::create_dir_all(root.join("Proyectos/test")).unwrap();
+        fs::write(root.join("Proyectos/test/Otra.md"), "x").unwrap();
+        git_ok(&root.join("Proyectos/test"), &["init", "--quiet"]).unwrap();
+
+        let err = init(root).unwrap_err();
+        assert!(err.contains("«Proyectos/test»"), "{err}");
+        assert!(!err.contains("warning:"), "{err}");
+
+        fs::remove_dir_all(root.join("Proyectos/test/.git")).unwrap();
+        init(root).unwrap();
+        assert_eq!(status(root).changes, 0);
     }
 
     #[test]
