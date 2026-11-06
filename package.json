@@ -1,7 +1,7 @@
 {
   "name": "botion",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -37,6 +37,7 @@
     "@types/react-dom": "^19.1.6",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "happy-dom": "^21.0.4",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
     "vite": "^8.0.16",
