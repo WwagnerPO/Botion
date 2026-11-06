@@ -2,6 +2,10 @@
 
 Cambios de cada versión de Botion. Descargas en [Releases](https://github.com/WwagnerPO/Botion/releases).
 
+## Próxima versión
+
+- Los Mac con procesador Intel dejan de tener instalador: solo Apple Silicon (M1 o posterior).
+
 ## v0.2.1
 
 ### Arreglos
