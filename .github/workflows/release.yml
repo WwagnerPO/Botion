@@ -23,9 +23,6 @@ jobs:
           - name: macOS (Apple Silicon)
             os: macos-latest
             args: --target aarch64-apple-darwin
-          - name: macOS (Intel)
-            os: macos-latest
-            args: --target x86_64-apple-darwin
           - name: Linux
             os: ubuntu-22.04
             args: ""
@@ -51,7 +48,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -123,7 +120,7 @@ jobs:
             Descarga el instalador de tu sistema:
 
             - Windows: `.msi` o `-setup.exe`
-            - macOS: `.dmg` (aarch64 para Apple Silicon, x64 para Intel)
+            - macOS: `_aarch64.dmg` (Macs con Apple Silicon: M1 o posterior)
             - Linux: `.AppImage`, `.deb` o `.rpm`
 
             Las apps no están firmadas con certificado de pago: Windows y macOS pueden avisar la primera vez.
