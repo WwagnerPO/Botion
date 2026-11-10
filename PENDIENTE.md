@@ -11,6 +11,18 @@ Tareas e ideas para próximas versiones. Para el día a día del desarrollo, ver
 
 ## Probar
 
+- [ ] Probar en Windows (v0.2.0 → v0.2.1):
+  - [x] «Acerca de»: versión, copiar información para soporte, buscar actualizaciones.
+  - [x] Tabla, avisos, columnas, diagrama.
+  - [x] PDF, YouTube.
+  - [x] Notas cifradas.
+  - [x] Exportar a PDF.
+  - [x] Recortador web.
+  - [x] Actualización automática de v0.2.0 a v0.2.1.
+  - [ ] Recordatorio con aviso del sistema a su hora.
+  - [ ] Exportar a HTML (con «Exportar», no guardando la página).
+  - [ ] Git con remoto: sincronizar entre dos equipos.
+  - [ ] Importar desde Notion.
 - [ ] Probar en un Mac de verdad:
   - [ ] Vídeo, audio y YouTube.
   - [ ] Recordatorios (notificaciones del sistema).
